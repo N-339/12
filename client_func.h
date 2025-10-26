@@ -1,6 +1,6 @@
 /*****************************************************************
-�ե�����̾	: client_func.h
-��ǽ		: ���饤����Ȥγ����ؿ������
+ファイル名	: client_func.h
+機能		: クライアントの外部関数の定義
 *****************************************************************/
 
 #ifndef _CLIENT_FUNC_H_
@@ -19,14 +19,16 @@ extern int SendRecvManager(void);
 extern int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE]);
 extern void DestroyWindow(void);
 extern void WindowEvent(int num);
-extern void DrawRectangle(int x,int y,int width,int height);
-extern void DrawCircle(int x,int y,int r);
-extern void DrawDiamond(int x,int y,int height);
+extern void DrawResult(char result); // 結果描画関数
+// extern void DrawRectangle(int x,int y,int width,int height); // 削除
+// extern void DrawCircle(int x,int y,int r); // 削除
+// extern void DrawDiamond(int x,int y,int height); // 削除
 
 /* client_command.c */
 extern int ExecuteCommand(char command);
-extern void SendRectangleCommand(void);
-extern void SendCircleCommand(int pos);
+extern void SendJankenCommand(char handCommand); // じゃんけん送信
+// extern void SendRectangleCommand(void); // 削除
+// extern void SendCircleCommand(int pos); // 削除
 extern void SendEndCommand(void);
 
 #endif

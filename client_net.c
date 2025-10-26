@@ -1,31 +1,33 @@
 /*****************************************************************
-¥Õ¥¡¥¤¥ëÌ¾	: client_net.c
-µ¡Ç½		: ¥¯¥é¥¤¥¢¥ó¥È¤Î¥Í¥Ã¥È¥ï¡¼¥¯½èÍı
+ãƒ•ã‚¡ã‚¤ãƒ«å	: client_net.c
+æ©Ÿèƒ½		: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒãƒƒãƒˆãƒ¯ãƒ¼ã‚¯å‡¦ç†
 *****************************************************************/
 
 #include"common.h"
 #include"client_func.h"
 #include<sys/socket.h>
 #include<netdb.h>
+#include <unistd.h> // read, write, close
+#include <arpa/inet.h> // ntohl
 
 #define	BUF_SIZE	100
 
-static int	gSocket;	/* ¥½¥±¥Ã¥È */
-static fd_set	gMask;	/* select()ÍÑ¤Î¥Ş¥¹¥¯ */
-static int	gWidth;		/* gMaskÃæ¤Î¤Î¥Á¥§¥Ã¥¯¤¹¤Ù¤­¥Ó¥Ã¥È¿ô */
+static int	gSocket;	/* ã‚½ã‚±ãƒƒãƒˆ */
+static fd_set	gMask;	/* select()ç”¨ã®ãƒã‚¹ã‚¯ */
+static int	gWidth;		/* gMaskä¸­ã®ã®ãƒã‚§ãƒƒã‚¯ã™ã¹ããƒ“ãƒƒãƒˆæ•° */
 
 static void GetAllName(int *clientID,int *num,char clientNames[][MAX_NAME_SIZE]);
 static void SetMask(void);
 static int RecvData(void *data,int dataSize);
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SetUpClient
-µ¡Ç½	: ¥µ¡¼¥Ğ¡¼¤È¤Î¥³¥Í¥¯¥·¥ç¥ó¤òÀßÎ©¤·¡¤
-		  ¥æ¡¼¥¶¡¼¤ÎÌ¾Á°¤ÎÁ÷¼õ¿®¤ò¹Ô¤¦
-°ú¿ô	: char	*hostName		: ¥Û¥¹¥È
-		  int	*num			: Á´¥¯¥é¥¤¥¢¥ó¥È¿ô
-		  char	clientNames[][]		: Á´¥¯¥é¥¤¥¢¥ó¥È¤Î¥æ¡¼¥¶¡¼Ì¾
-½ĞÎÏ	: ¥³¥Í¥¯¥·¥ç¥ó¤Ë¼ºÇÔ¤·¤¿»ş-1,À®¸ù¤·¤¿»ş0
+é–¢æ•°å	: SetUpClient
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã¨ã®ã‚³ãƒã‚¯ã‚·ãƒ§ãƒ³ã‚’è¨­ç«‹ã—ï¼Œ
+		  ãƒ¦ãƒ¼ã‚¶ãƒ¼ã®åå‰ã®é€å—ä¿¡ã‚’è¡Œã†
+å¼•æ•°	: char	*hostName		: ãƒ›ã‚¹ãƒˆ
+		  int	*num			: å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•°
+		  char	clientNames[][]		: å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ¦ãƒ¼ã‚¶ãƒ¼å
+å‡ºåŠ›	: ã‚³ãƒã‚¯ã‚·ãƒ§ãƒ³ã«å¤±æ•—ã—ãŸæ™‚-1,æˆåŠŸã—ãŸæ™‚0
 *****************************************************************/
 int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAME_SIZE])
 {
@@ -34,7 +36,7 @@ int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAM
     int			len;
     char		str[BUF_SIZE];
 
-    /* ¥Û¥¹¥ÈÌ¾¤«¤é¥Û¥¹¥È¾ğÊó¤òÆÀ¤ë */
+    /* ãƒ›ã‚¹ãƒˆåã‹ã‚‰ãƒ›ã‚¹ãƒˆæƒ…å ±ã‚’å¾—ã‚‹ */
     if((servHost = gethostbyname(hostName))==NULL){
 		fprintf(stderr,"Unknown host\n");
 		return -1;
@@ -45,13 +47,13 @@ int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAM
     server.sin_port = htons(PORT);
     bcopy(servHost->h_addr,(char*)&server.sin_addr,servHost->h_length);
 
-    /* ¥½¥±¥Ã¥È¤òºîÀ®¤¹¤ë */
+    /* ã‚½ã‚±ãƒƒãƒˆã‚’ä½œæˆã™ã‚‹ */
     if((gSocket = socket(AF_INET,SOCK_STREAM,0)) < 0){
 		fprintf(stderr,"socket allocation failed\n");
 		return -1;
     }
 
-    /* ¥µ¡¼¥Ğ¡¼¤ÈÀÜÂ³¤¹¤ë */
+    /* ã‚µãƒ¼ãƒãƒ¼ã¨æ¥ç¶šã™ã‚‹ */
     if(connect(gSocket,(struct sockaddr*)&server,sizeof(server)) == -1){
 		fprintf(stderr,"cannot connect\n");
 		close(gSocket);
@@ -59,7 +61,7 @@ int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAM
     }
     fprintf(stderr,"connected\n");
 
-    /* Ì¾Á°¤òÆÉ¤ß¹ş¤ß¥µ¡¼¥Ğ¡¼¤ËÁ÷¤ë */
+    /* åå‰ã‚’èª­ã¿è¾¼ã¿ã‚µãƒ¼ãƒãƒ¼ã«é€ã‚‹ */
     do{
 		printf("Enter Your Name\n");
 		fgets(str,BUF_SIZE,stdin);
@@ -70,58 +72,58 @@ int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAM
 
     printf("Please Wait\n");
 
-    /* Á´¥¯¥é¥¤¥¢¥ó¥È¤Î¥æ¡¼¥¶¡¼Ì¾¤òÆÀ¤ë */
+    /* å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ¦ãƒ¼ã‚¶ãƒ¼åã‚’å¾—ã‚‹ */
     GetAllName(clientID,num,clientNames);
 
-    /* select()¤Î¤¿¤á¤Î¥Ş¥¹¥¯ÃÍ¤òÀßÄê¤¹¤ë */
+    /* select()ã®ãŸã‚ã®ãƒã‚¹ã‚¯å€¤ã‚’è¨­å®šã™ã‚‹ */
     SetMask();
     
     return 0;
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SendRecvManager
-µ¡Ç½	: ¥µ¡¼¥Ğ¡¼¤«¤éÁ÷¤é¤ì¤Æ¤­¤¿¥Ç¡¼¥¿¤ò½èÍı¤¹¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¥×¥í¥°¥é¥à½ªÎ»¥³¥Ş¥ó¥É¤¬Á÷¤é¤ì¤Æ¤­¤¿»ş0¤òÊÖ¤¹¡¥
-		  ¤½¤ì°Ê³°¤Ï1¤òÊÖ¤¹
+é–¢æ•°å	: SendRecvManager
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰é€ã‚‰ã‚Œã¦ããŸãƒ‡ãƒ¼ã‚¿ã‚’å‡¦ç†ã™ã‚‹
+å¼•æ•°	: ãªã—
+å‡ºåŠ›	: ãƒ—ãƒ­ã‚°ãƒ©ãƒ çµ‚äº†ã‚³ãƒãƒ³ãƒ‰ãŒé€ã‚‰ã‚Œã¦ããŸæ™‚0ã‚’è¿”ã™ï¼
+		  ãã‚Œä»¥å¤–ã¯1ã‚’è¿”ã™
 *****************************************************************/
 int SendRecvManager(void)
 {
     fd_set	readOK;
     char	command;
-    int		i;
+//    int		i; // æœªä½¿ç”¨
     int		endFlag = 1;
     struct timeval	timeout;
 
-    /* select()¤ÎÂÔ¤Á»ş´Ö¤òÀßÄê¤¹¤ë */
+    /* select()ã®å¾…ã¡æ™‚é–“ã‚’è¨­å®šã™ã‚‹ */
     timeout.tv_sec = 0;
     timeout.tv_usec = 20;
 
     readOK = gMask;
-    /* ¥µ¡¼¥Ğ¡¼¤«¤é¥Ç¡¼¥¿¤¬ÆÏ¤¤¤Æ¤¤¤ë¤«Ä´¤Ù¤ë */
+    /* ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰ãƒ‡ãƒ¼ã‚¿ãŒå±Šã„ã¦ã„ã‚‹ã‹èª¿ã¹ã‚‹ */
     select(gWidth,&readOK,NULL,NULL,&timeout);
     if(FD_ISSET(gSocket,&readOK)){
-		/* ¥µ¡¼¥Ğ¡¼¤«¤é¥Ç¡¼¥¿¤¬ÆÏ¤¤¤Æ¤¤¤¿ */
-    	/* ¥³¥Ş¥ó¥É¤òÆÉ¤ß¹ş¤à */
+		/* ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰ãƒ‡ãƒ¼ã‚¿ãŒå±Šã„ã¦ã„ãŸ */
+    	/* ã‚³ãƒãƒ³ãƒ‰ã‚’èª­ã¿è¾¼ã‚€ */
 		RecvData(&command,sizeof(char));
-    	/* ¥³¥Ş¥ó¥É¤ËÂĞ¤¹¤ë½èÍı¤ò¹Ô¤¦ */
+    	/* ã‚³ãƒãƒ³ãƒ‰ã«å¯¾ã™ã‚‹å‡¦ç†ã‚’è¡Œã† */
 		endFlag = ExecuteCommand(command);
     }
     return endFlag;
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: RecvIntData
-µ¡Ç½	: ¥µ¡¼¥Ğ¡¼¤«¤éint·¿¤Î¥Ç¡¼¥¿¤ò¼õ¤±¼è¤ë
-°ú¿ô	: int		*intData	: ¼õ¿®¤·¤¿¥Ç¡¼¥¿
-½ĞÎÏ	: ¼õ¤±¼è¤Ã¤¿¥Ğ¥¤¥È¿ô
+é–¢æ•°å	: RecvIntData
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰intå‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’å—ã‘å–ã‚‹
+å¼•æ•°	: int		*intData	: å—ä¿¡ã—ãŸãƒ‡ãƒ¼ã‚¿
+å‡ºåŠ›	: å—ã‘å–ã£ãŸãƒã‚¤ãƒˆæ•°
 *****************************************************************/
 int RecvIntData(int *intData)
 {
     int n,tmp;
     
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(intData!=NULL);
 
     n = RecvData(&tmp,sizeof(int));
@@ -131,15 +133,15 @@ int RecvIntData(int *intData)
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SendData
-µ¡Ç½	: ¥µ¡¼¥Ğ¡¼¤Ë¥Ç¡¼¥¿¤òÁ÷¤ë
-°ú¿ô	: void		*data		: Á÷¤ë¥Ç¡¼¥¿
-		  int		dataSize	: Á÷¤ë¥Ç¡¼¥¿¤Î¥µ¥¤¥º
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SendData
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã«ãƒ‡ãƒ¼ã‚¿ã‚’é€ã‚‹
+å¼•æ•°	: void		*data		: é€ã‚‹ãƒ‡ãƒ¼ã‚¿
+		  int		dataSize	: é€ã‚‹ãƒ‡ãƒ¼ã‚¿ã®ã‚µã‚¤ã‚º
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 void SendData(void *data,int dataSize)
 {
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(data != NULL);
     assert(0 < dataSize);
 
@@ -147,10 +149,10 @@ void SendData(void *data,int dataSize)
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: CloseSoc
-µ¡Ç½	: ¥µ¡¼¥Ğ¡¼¤È¤Î¥³¥Í¥¯¥·¥ç¥ó¤òÀÚÃÇ¤¹¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: CloseSoc
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã¨ã®ã‚³ãƒã‚¯ã‚·ãƒ§ãƒ³ã‚’åˆ‡æ–­ã™ã‚‹
+å¼•æ•°	: ãªã—
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 void CloseSoc(void)
 {
@@ -162,27 +164,28 @@ void CloseSoc(void)
 static
 *****/
 /*****************************************************************
-´Ø¿ôÌ¾	: GetAllName
-µ¡Ç½	: ¥µ¡¼¥Ğ¡¼¤«¤éÁ´¥¯¥é¥¤¥¢¥ó¥È¤Î¥æ¡¼¥¶¡¼Ì¾¤ò¼õ¿®¤¹¤ë
-°ú¿ô	: int		*num			: ¥¯¥é¥¤¥¢¥ó¥È¿ô
-		  char		clientNames[][]	: Á´¥¯¥é¥¤¥¢¥ó¥È¤Î¥æ¡¼¥¶¡¼Ì¾
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: GetAllName
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ¦ãƒ¼ã‚¶ãƒ¼åã‚’å—ä¿¡ã™ã‚‹
+å¼•æ•°	: int		*num			: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•°
+		  char		clientNames[][]	: å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ¦ãƒ¼ã‚¶ãƒ¼å
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 static void GetAllName(int *clientID,int *num,char clientNames[][MAX_NAME_SIZE])
 {
     int	i;
 
-    /* ¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ¤ÎÆÉ¤ß¹ş¤ß */
+    /* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆç•ªå·ã®èª­ã¿è¾¼ã¿ */
     RecvIntData(clientID);
-    /* ¥¯¥é¥¤¥¢¥ó¥È¿ô¤ÎÆÉ¤ß¹ş¤ß */
+    /* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•°ã®èª­ã¿è¾¼ã¿ */
     RecvIntData(num);
 
-    /* Á´¥¯¥é¥¤¥¢¥ó¥È¤Î¥æ¡¼¥¶¡¼Ì¾¤òÆÉ¤ß¹ş¤à */
+    /* å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ¦ãƒ¼ã‚¶ãƒ¼åã‚’èª­ã¿è¾¼ã‚€ */
     for(i=0;i<(*num);i++){
 		RecvData(clientNames[i],MAX_NAME_SIZE);
     }
 #ifndef NDEBUG
     printf("#####\n");
+    printf("client ID = %d\n",(*clientID)); // clientIDã‚‚è¡¨ç¤º
     printf("client number = %d\n",(*num));
     for(i=0;i<(*num);i++){
 		printf("%d:%s\n",i,clientNames[i]);
@@ -191,14 +194,14 @@ static void GetAllName(int *clientID,int *num,char clientNames[][MAX_NAME_SIZE])
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SetMask
-µ¡Ç½	: select()¤Î¤¿¤á¤Î¥Ş¥¹¥¯ÃÍ¤òÀßÄê¤¹¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SetMask
+æ©Ÿèƒ½	: select()ã®ãŸã‚ã®ãƒã‚¹ã‚¯å€¤ã‚’è¨­å®šã™ã‚‹
+å¼•æ•°	: ãªã—
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 static void SetMask(void)
 {
-    int	i;
+//    int	i; // æœªä½¿ç”¨
 
     FD_ZERO(&gMask);
     FD_SET(gSocket,&gMask);
@@ -207,15 +210,15 @@ static void SetMask(void)
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: RecvData
-µ¡Ç½	: ¥µ¡¼¥Ğ¡¼¤«¤é¥Ç¡¼¥¿¤ò¼õ¤±¼è¤ë
-°ú¿ô	: void		*data		: ¼õ¿®¤·¤¿¥Ç¡¼¥¿
-		  int		dataSize	: ¼õ¿®¤¹¤ë¥Ç¡¼¥¿¤Î¥µ¥¤¥º
-½ĞÎÏ	: ¼õ¤±¼è¤Ã¤¿¥Ğ¥¤¥È¿ô
+é–¢æ•°å	: RecvData
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰ãƒ‡ãƒ¼ã‚¿ã‚’å—ã‘å–ã‚‹
+å¼•æ•°	: void		*data		: å—ä¿¡ã—ãŸãƒ‡ãƒ¼ã‚¿
+		  int		dataSize	: å—ä¿¡ã™ã‚‹ãƒ‡ãƒ¼ã‚¿ã®ã‚µã‚¤ã‚º
+å‡ºåŠ›	: å—ã‘å–ã£ãŸãƒã‚¤ãƒˆæ•°
 *****************************************************************/
 int RecvData(void *data,int dataSize)
 {
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(data != NULL);
     assert(0 < dataSize);
 

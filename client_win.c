@@ -1,6 +1,6 @@
 /*****************************************************************
-¥Õ¥¡¥¤¥ëÌ¾	: client_win.c
-µ¡Ç½		: ¥¯¥é¥¤¥¢¥ó¥È¤Î¥æ¡¼¥¶¡¼¥¤¥ó¥¿¡¼¥Õ¥§¡¼¥¹½èÍı
+ãƒ•ã‚¡ã‚¤ãƒ«å	: client_win.c
+æ©Ÿèƒ½		: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ¦ãƒ¼ã‚¶ãƒ¼ã‚¤ãƒ³ã‚¿ãƒ¼ãƒ•ã‚§ãƒ¼ã‚¹å‡¦ç†
 *****************************************************************/
 
 #include<SDL2/SDL.h>
@@ -11,16 +11,20 @@
 
 static SDL_Window *gMainWindow;
 static SDL_Renderer *gMainRenderer;
-static SDL_Rect gButtonRect[MAX_CLIENTS+2];
+static SDL_Rect gButtonRect[4]; // ã‚°ãƒ¼ã€ãƒãƒ§ã‚­ã€ãƒ‘ãƒ¼ã€END ã®4ã¤
 
-static int CheckButtonNO(int x,int y,int num);
+// ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰ã®çµæœå¾…ã¡ã‹ã©ã†ã‹ (0: å¾…ã£ã¦ãªã„, 1: å¾…ã£ã¦ã‚‹)
+static int gWaitingForResult = 0;
+
+static int CheckButtonNO(int x,int y);
+static void DrawResultText(const char* text);
 
 /*****************************************************************
-´Ø¿ôÌ¾	: InitWindows
-µ¡Ç½	: ¥á¥¤¥ó¥¦¥¤¥ó¥É¥¦¤ÎÉ½¼¨¡¤ÀßÄê¤ò¹Ô¤¦
-°ú¿ô	: int	clientID		: ¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ
-		  int	num				: Á´¥¯¥é¥¤¥¢¥ó¥È¿ô
-½ĞÎÏ	: Àµ¾ï¤ËÀßÄê¤Ç¤­¤¿¤È¤­0¡¤¼ºÇÔ¤·¤¿¤È¤­-1
+é–¢æ•°å	: InitWindows
+æ©Ÿèƒ½	: ãƒ¡ã‚¤ãƒ³ã‚¦ã‚¤ãƒ³ãƒ‰ã‚¦ã®è¡¨ç¤ºï¼Œè¨­å®šã‚’è¡Œã†
+å¼•æ•°	: int	clientID		: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆç•ªå·
+		  int	num				: å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•° (å¸¸ã«2ã®ã¯ãš)
+å‡ºåŠ›	: æ­£å¸¸ã«è¨­å®šã§ããŸã¨ã0ï¼Œå¤±æ•—ã—ãŸã¨ã-1
 *****************************************************************/
 int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
 {
@@ -28,80 +32,85 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
 	SDL_Texture *texture;
 	SDL_Surface *image;
 	SDL_Rect src_rect;
-	SDL_Rect dest_rect;
-	char clientButton[4][6]={"0.jpg","1.jpg","2.jpg","3.jpg"};
-	char endButton[]="END.jpg";
-	char allButton[]="ALL.jpg";
+	// ã‚°ãƒ¼ã€ãƒãƒ§ã‚­ã€ãƒ‘ãƒ¼ã€END
+	char buttonFiles[4][10]={"1.jpg","2.jpg","3.jpg","END.jpg"}; 
 	char *s,title[10];
 
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
-    assert(0<num && num<=MAX_CLIENTS);
-	
-	/* SDL¤Î½é´ü²½ */
+    /* SDLã®åˆæœŸåŒ– */
 	if(SDL_Init(SDL_INIT_VIDEO) < 0) {
 		printf("failed to initialize SDL.\n");
 		return -1;
 	}
 	
-	/* ¥á¥¤¥ó¤Î¥¦¥¤¥ó¥É¥¦¤òºîÀ®¤¹¤ë */
-	if((gMainWindow = SDL_CreateWindow("My Window", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 500, 300, 0)) == NULL) {
+	/* ãƒ¡ã‚¤ãƒ³ã®ã‚¦ã‚¤ãƒ³ãƒ‰ã‚¦ã‚’ä½œæˆã™ã‚‹ (ã‚µã‚¤ã‚ºã‚’èª¿æ•´ 340x150) */
+	if((gMainWindow = SDL_CreateWindow("Janken Game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 340, 150, 0)) == NULL) {
 		printf("failed to initialize videomode.\n");
 		return -1;
 	}
 
-	gMainRenderer = SDL_CreateRenderer(gMainWindow, -1, SDL_RENDERER_SOFTWARE);//SDL_RENDERER_ACCELERATED |SDL_RENDERER_PRESENTVSYNC);//0);
+	gMainRenderer = SDL_CreateRenderer(gMainWindow, -1, SDL_RENDERER_SOFTWARE);
 
-	/* ¥¦¥¤¥ó¥É¥¦¤Î¥¿¥¤¥È¥ë¤ò¥»¥Ã¥È */
-	sprintf(title,"%d",clientID);
+	/* ã‚¦ã‚¤ãƒ³ãƒ‰ã‚¦ã®ã‚¿ã‚¤ãƒˆãƒ«ã‚’ã‚»ãƒƒãƒˆ (ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆID) */
+	sprintf(title,"Client %d",clientID);
 	SDL_SetWindowTitle(gMainWindow, title);
 	
-	/* ÇØ·Ê¤òÇò¤Ë¤¹¤ë */
+	/* èƒŒæ™¯ã‚’ç™½ã«ã™ã‚‹ */
 	SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255);
   	SDL_RenderClear(gMainRenderer);
 
-	/* ¥Ü¥¿¥ó¤ÎºîÀ® */
-	for(i=0;i<num+2;i++){
-		gButtonRect[i].x = 20+80*i;
-		gButtonRect[i].y=10;
-		gButtonRect[i].w=70;
-		gButtonRect[i].h=20;
+	/* ãƒœã‚¿ãƒ³ã®ä½œæˆ (4ã¤) */
+	for(i=0;i<4;i++){
+		gButtonRect[i].x = 20 + 80*i; // 80é–“éš”
+		gButtonRect[i].y = 10;
+		gButtonRect[i].w = 70;
+		gButtonRect[i].h = 50; // å°‘ã—é«˜ã•ã‚’ç¢ºä¿
       
-		if(i==num){
-			s=allButton;
-		}
-		else if(i==num+1){
-			s=endButton;
-		}
-		else{
-			s=clientButton[i];
-		}
+		s = buttonFiles[i];
+
 		image = IMG_Load(s);
+        if (image == NULL) {
+            printf("failed to load image: %s (SDL_image Error: %s)\n", s, IMG_GetError());
+            // 1.jpg, 2.jpg, 3.jpg, END.jpg ãŒå¿…è¦
+            SDL_DestroyRenderer(gMainRenderer);
+            SDL_DestroyWindow(gMainWindow);
+            SDL_Quit();
+            return -1;
+        }
 		texture = SDL_CreateTextureFromSurface(gMainRenderer, image);
 		src_rect = (SDL_Rect){0, 0, image->w, image->h};
+        // ãƒœã‚¿ãƒ³ã®çŸ©å½¢ã«åˆã‚ã›ã¦æç”»
 		SDL_RenderCopy(gMainRenderer, texture, &src_rect, (&gButtonRect[i]));
 		SDL_FreeSurface(image);
+        SDL_DestroyTexture(texture);
 	}
+
+    /* çµæœè¡¨ç¤ºé ˜åŸŸã®åˆæœŸåŒ– */
+    DrawResultText("Welcome! Choose your hand.");
+
 	SDL_RenderPresent(gMainRenderer);
 	
+    gWaitingForResult = 0; // åˆæœŸçŠ¶æ…‹ã¯å¾…ã£ã¦ã„ãªã„
 	return 0;
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: DestroyWindow
-µ¡Ç½	: SDL¤ò½ªÎ»¤¹¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: DestroyWindow
+æ©Ÿèƒ½	: SDLã‚’çµ‚äº†ã™ã‚‹
+å¼•æ•°	: ãªã—
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 void DestroyWindow(void)
 {
+    SDL_DestroyRenderer(gMainRenderer);
+    SDL_DestroyWindow(gMainWindow);
 	SDL_Quit();
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: WindowEvent
-µ¡Ç½	: ¥á¥¤¥ó¥¦¥¤¥ó¥É¥¦¤ËÂĞ¤¹¤ë¥¤¥Ù¥ó¥È½èÍı¤ò¹Ô¤¦
-°ú¿ô	: int		num		: Á´¥¯¥é¥¤¥¢¥ó¥È¿ô
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: WindowEvent
+æ©Ÿèƒ½	: ãƒ¡ã‚¤ãƒ³ã‚¦ã‚¤ãƒ³ãƒ‰ã‚¦ã«å¯¾ã™ã‚‹ã‚¤ãƒ™ãƒ³ãƒˆå‡¦ç†ã‚’è¡Œã†
+å¼•æ•°	: int		num		: å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•° (æœªä½¿ç”¨ã ãŒIFç¶­æŒ)
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 void WindowEvent(int num)
 {
@@ -109,36 +118,52 @@ void WindowEvent(int num)
 	SDL_MouseButtonEvent *mouse;
 	int buttonNO;
 
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
-    assert(0<num && num<=MAX_CLIENTS);
-
 	if(SDL_PollEvent(&event)){
 
 		switch(event.type){
 			case SDL_QUIT:
+                // ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦é–‰ã˜ãŸã‚‰ENDé€ä¿¡
 				SendEndCommand();
 				break;
 			case SDL_MOUSEBUTTONUP:
 				mouse = (SDL_MouseButtonEvent*)&event;
 				if(mouse->button == SDL_BUTTON_LEFT){
-					buttonNO = CheckButtonNO(mouse->x,mouse->y,num);
+					
+                    // ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰ã®çµæœå¾…ã¡ä¸­ã¯ãƒœã‚¿ãƒ³æ“ä½œã‚’ç„¡è¦–
+                    if (gWaitingForResult) {
+#ifndef NDEBUG
+                        printf("Waiting for result. Button press ignored.\n");
+#endif
+                        break;
+                    }
+
+					buttonNO = CheckButtonNO(mouse->x,mouse->y);
 #ifndef NDEBUG
 					printf("#####\n");
 					printf("WindowEvent()\n");
 					printf("Button %d is pressed\n",buttonNO);
 #endif
-					if(0<=buttonNO && buttonNO<num){
-						/* Ì¾Á°¤Î½ñ¤«¤ì¤¿¥Ü¥¿¥ó¤¬²¡¤µ¤ì¤¿ */
-						SendCircleCommand(buttonNO);
-					}
-					else if(buttonNO==num){
-						/* ¡ÖAll¡×¤È½ñ¤«¤ì¤¿¥Ü¥¿¥ó¤¬²¡¤µ¤ì¤¿ */
-						SendRectangleCommand();
-					}
-					else if(buttonNO==num+1){
-						/* ¡ÖEnd¡×¤È½ñ¤«¤ì¤¿¥Ü¥¿¥ó¤¬²¡¤µ¤ì¤¿ */
-						SendEndCommand();
-					}
+					switch(buttonNO) {
+                        case 0: // ã‚°ãƒ¼
+                            SendJankenCommand(JANKEN_GOO_COMMAND);
+                            gWaitingForResult = 1; // çµæœå¾…ã¡çŠ¶æ…‹ã¸
+                            DrawResultText("You: GOO. Waiting for opponent...");
+                            break;
+                        case 1: // ãƒãƒ§ã‚­
+                            SendJankenCommand(JANKEN_CHOKI_COMMAND);
+                            gWaitingForResult = 1; // çµæœå¾…ã¡çŠ¶æ…‹ã¸
+                            DrawResultText("You: CHOKI. Waiting for opponent...");
+                            break;
+                        case 2: // ãƒ‘ãƒ¼
+                            SendJankenCommand(JANKEN_PAR_COMMAND);
+                            gWaitingForResult = 1; // çµæœå¾…ã¡çŠ¶æ…‹ã¸
+                            DrawResultText("You: PAR. Waiting for opponent...");
+                            break;
+                        case 3: // END
+                            SendEndCommand();
+                            // ENDé€ä¿¡æ™‚ã¯gWaitingForResultã‚’æ“ä½œã—ãªã„ (ãã®ã¾ã¾çµ‚äº†ã™ã‚‹ãŸã‚)
+                            break;
+                    }
 				}
 				break;
 		}
@@ -146,96 +171,77 @@ void WindowEvent(int num)
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: DrawRectangle
-µ¡Ç½	: ¥á¥¤¥ó¥¦¥¤¥ó¥É¥¦¤Ë»Í³Ñ¤òÉ½¼¨¤¹¤ë
-°ú¿ô	: int		x			: »Í³Ñ¤Îº¸¾å¤Î x ºÂÉ¸
-		  int		y			: »Í³Ñ¤Îº¸¾å¤Î y ºÂÉ¸
-		  int		width		: »Í³Ñ¤Î²£Éı
-		  int		height		: »Í³Ñ¤Î¹â¤µ
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: DrawResult
+æ©Ÿèƒ½	: ãƒ¡ã‚¤ãƒ³ã‚¦ã‚¤ãƒ³ãƒ‰ã‚¦ã«ã˜ã‚ƒã‚“ã‘ã‚“ã®çµæœã‚’è¡¨ç¤ºã™ã‚‹
+å¼•æ•°	: char	result		: çµæœã‚³ãƒãƒ³ãƒ‰ (W, L, D)
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
-void DrawRectangle(int x,int y,int width,int height)
+void DrawResult(char result)
 {
-#ifndef NDEBUG
-    printf("#####\n");
-    printf("DrawRectangle()\n");
-    printf("x=%d,y=%d,width=%d,height=%d\n",x,y,width,height);
-#endif
+    gWaitingForResult = 0; // çµæœãŒæ¥ãŸã®ã§å¾…ã¡çŠ¶æ…‹è§£é™¤
 
-
-	rectangleColor(gMainRenderer,x,y,x+width,y+height,0xff0000ff);
-	SDL_RenderPresent(gMainRenderer);
-
-}
-
-/*****************************************************************
-´Ø¿ôÌ¾	: DrawCircle
-µ¡Ç½	: ¥á¥¤¥ó¥¦¥¤¥ó¥É¥¦¤Ë±ß¤òÉ½¼¨¤¹¤ë
-°ú¿ô	: int		x		: ±ß¤Î x ºÂÉ¸
-		  int		y		: ±ß¤Î y ºÂÉ¸
-		  int		r		: ±ß¤ÎÈ¾·Â
-½ĞÎÏ	: ¤Ê¤·
-*****************************************************************/
-void DrawCircle(int x,int y,int r)
-{
-#ifndef NDEBUG
-	printf("#####\n");
-    printf("DrawCircle()\n");
-    printf("x=%d,y=%d,tyokkei=%d\n",x,y,r);
-#endif
-
-     circleColor(gMainRenderer,x,y,r,0xff0000ff);
-	SDL_RenderPresent(gMainRenderer);
-}
-
-/*****************************************************************
-´Ø¿ôÌ¾	: DrawDiamond
-µ¡Ç½	: ¥á¥¤¥ó¥¦¥¤¥ó¥É¥¦¤ËÉ©·Á¤òÉ½¼¨¤¹¤ë
-°ú¿ô	: int		x		: º¸¾å¤Î x ºÂÉ¸
-		  int		y		: º¸¾å¤Î y ºÂÉ¸
-		  int		height		: ¹â¤µ
-½ĞÎÏ	: ¤Ê¤·
-*****************************************************************/
-void DrawDiamond(int x,int y,int height)
-{
-	Sint16	vx[5],vy[5];
-	int	i;
-
-#ifndef NDEBUG
-    printf("#####\n");
-    printf("DrawDiamond()\n");
-    printf("x=%d,y=%d,height=%d\n",x,y,height);
-#endif
-
-    for(i=0;i<4;i++){
-        vx[i] = x + height*((1-i)%2)/2;
-        vy[i] = y + height*((2-i)%2);
+    switch(result) {
+        case RESULT_WIN_COMMAND:
+            DrawResultText("You WIN! Choose next hand.");
+            break;
+        case RESULT_LOSE_COMMAND:
+            DrawResultText("You LOSE... Choose next hand.");
+            break;
+        case RESULT_DRAW_COMMAND:
+            DrawResultText("DRAW. Choose next hand.");
+            break;
+        case RESULT_WAIT_COMMAND:
+            // ã‚µãƒ¼ãƒãƒ¼å´ãƒ­ã‚¸ãƒƒã‚¯å¤‰æ›´ã«ã‚ˆã‚Šã€ã“ã‚Œã¯ä½¿ã‚ã‚Œãªã„ã¯ãš
+            // (ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆå´ã§ã€Œç›¸æ‰‹å¾…ã¡ã€ã‚’è¡¨ç¤ºã—ã¦ã„ã‚‹ãŸã‚)
+             DrawResultText("Waiting for opponent...");
+             gWaitingForResult = 1; // ç›¸æ‰‹å¾…ã¡ãªã‚‰ã¾ã å¾…ã¤
+            break;
     }
-    vx[4]=vx[0];
-    vy[4]=vy[0];
-	
-	polygonColor(gMainRenderer, vx, vy, 5 , 0xff0000ff);
-	SDL_RenderPresent(gMainRenderer);
-
 }
+
+
+/* (DrawRectangle, DrawCircle, DrawDiamond ã¯å‰Šé™¤) */
+
 
 /*****
 static
 *****/
+
 /*****************************************************************
-´Ø¿ôÌ¾	: CheckButtonNO
-µ¡Ç½	: ¥¯¥ê¥Ã¥¯¤µ¤ì¤¿¥Ü¥¿¥ó¤ÎÈÖ¹æ¤òÊÖ¤¹
-°ú¿ô	: int	   x		: ¥Ş¥¦¥¹¤Î²¡¤µ¤ì¤¿ x ºÂÉ¸
-		  int	   y		: ¥Ş¥¦¥¹¤Î²¡¤µ¤ì¤¿ y ºÂÉ¸
-		  char	   num		: Á´¥¯¥é¥¤¥¢¥ó¥È¿ô
-½ĞÎÏ	: ²¡¤µ¤ì¤¿¥Ü¥¿¥ó¤ÎÈÖ¹æ¤òÊÖ¤¹
-		  ¥Ü¥¿¥ó¤¬²¡¤µ¤ì¤Æ¤¤¤Ê¤¤»ş¤Ï-1¤òÊÖ¤¹
+é–¢æ•°å	: DrawResultText
+æ©Ÿèƒ½	: ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ä¸‹éƒ¨ã«çµæœæ–‡å­—åˆ—ã‚’æç”»ã™ã‚‹
+å¼•æ•°	: const char* text : è¡¨ç¤ºã™ã‚‹æ–‡å­—åˆ—
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
-static int CheckButtonNO(int x,int y,int num)
+static void DrawResultText(const char* text)
+{
+    // ä¸‹éƒ¨ã®é ˜åŸŸã‚’ç™½ã§ã‚¯ãƒªã‚¢
+    SDL_Rect clearRect = {0, 80, 340, 70}; // Y=80ã‹ã‚‰ä¸‹
+	SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255);
+  	SDL_RenderFillRect(gMainRenderer, &clearRect);
+
+    // ãƒ†ã‚­ã‚¹ãƒˆã‚’æç”» (é»’è‰²: 0x000000ff)
+    // åº§æ¨™ã¯ (X=10, Y=100)
+    stringColor(gMainRenderer, 10, 100, text, 0x000000ff);
+
+    SDL_RenderPresent(gMainRenderer);
+}
+
+
+/*****************************************************************
+é–¢æ•°å	: CheckButtonNO
+æ©Ÿèƒ½	: ã‚¯ãƒªãƒƒã‚¯ã•ã‚ŒãŸãƒœã‚¿ãƒ³ã®ç•ªå·ã‚’è¿”ã™
+å¼•æ•°	: int	   x		: ãƒã‚¦ã‚¹ã®æŠ¼ã•ã‚ŒãŸ x åº§æ¨™
+		  int	   y		: ãƒã‚¦ã‚¹ã®æŠ¼ã•ã‚ŒãŸ y åº§æ¨™
+å‡ºåŠ›	: æŠ¼ã•ã‚ŒãŸãƒœã‚¿ãƒ³ã®ç•ªå·(0-3)ã‚’è¿”ã™
+		  ãƒœã‚¿ãƒ³ãŒæŠ¼ã•ã‚Œã¦ã„ãªã„æ™‚ã¯-1ã‚’è¿”ã™
+*****************************************************************/
+static int CheckButtonNO(int x,int y)
 {
 	int i;
+    int num = 4; // ãƒœã‚¿ãƒ³ã¯4ã¤
 
- 	for(i=0;i<num+2;i++){
+ 	for(i=0;i<num;i++){
 		if(gButtonRect[i].x < x &&
 			gButtonRect[i].y < y &&
       		gButtonRect[i].x + gButtonRect[i].w > x &&

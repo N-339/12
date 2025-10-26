@@ -1,24 +1,26 @@
 /*****************************************************************
-¥Õ¥¡¥¤¥ëÌ¾	: client_command.c
-µ¡Ç½		: ¥¯¥é¥¤¥¢¥ó¥È¤Î¥³¥Ş¥ó¥É½èÍı
+ãƒ•ã‚¡ã‚¤ãƒ«å	: client_command.c
+æ©Ÿèƒ½		: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ã‚³ãƒãƒ³ãƒ‰å‡¦ç†
 *****************************************************************/
 
 #include"common.h"
 #include"client_func.h"
+#include <arpa/inet.h> // htonl
+#include <unistd.h> // read, write, close
 
 static void SetIntData2DataBlock(void *data,int intData,int *dataSize);
 static void SetCharData2DataBlock(void *data,char charData,int *dataSize);
-static void RecvCircleData(void);
-static void RecvRectangleData(void);
-static void RecvDiamondData(void);
+// static void RecvCircleData(void); // å‰Šé™¤
+// static void RecvRectangleData(void); // å‰Šé™¤
+// static void RecvDiamondData(void); // å‰Šé™¤
 
 /*****************************************************************
-´Ø¿ôÌ¾	: ExecuteCommand
-µ¡Ç½	: ¥µ¡¼¥Ğ¡¼¤«¤éÁ÷¤é¤ì¤Æ¤­¤¿¥³¥Ş¥ó¥É¤ò¸µ¤Ë¡¤
-		  °ú¤­¿ô¤ò¼õ¿®¤·¡¤¼Â¹Ô¤¹¤ë
-°ú¿ô	: char	command		: ¥³¥Ş¥ó¥É
-½ĞÎÏ	: ¥×¥í¥°¥é¥à½ªÎ»¥³¥Ş¥ó¥É¤¬¤ª¤¯¤é¤ì¤Æ¤­¤¿»ş¤Ë¤Ï0¤òÊÖ¤¹¡¥
-		  ¤½¤ì°Ê³°¤Ï1¤òÊÖ¤¹
+é–¢æ•°å	: ExecuteCommand
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰é€ã‚‰ã‚Œã¦ããŸã‚³ãƒãƒ³ãƒ‰ã‚’å…ƒã«ï¼Œ
+		  å¼•ãæ•°ã‚’å—ä¿¡ã—ï¼Œå®Ÿè¡Œã™ã‚‹
+å¼•æ•°	: char	command		: ã‚³ãƒãƒ³ãƒ‰
+å‡ºåŠ›	: ãƒ—ãƒ­ã‚°ãƒ©ãƒ çµ‚äº†ã‚³ãƒãƒ³ãƒ‰ãŒãŠãã‚‰ã‚Œã¦ããŸæ™‚ã«ã¯0ã‚’è¿”ã™ï¼
+		  ãã‚Œä»¥å¤–ã¯1ã‚’è¿”ã™
 *****************************************************************/
 int ExecuteCommand(char command)
 {
@@ -32,80 +34,57 @@ int ExecuteCommand(char command)
 		case END_COMMAND:
 			endFlag = 0;
 			break;
-	    case CIRCLE_COMMAND:
-			RecvCircleData();
+        /* çµæœå—ä¿¡ */
+	    case RESULT_WIN_COMMAND:
+        case RESULT_LOSE_COMMAND:
+        case RESULT_DRAW_COMMAND:
+        case RESULT_WAIT_COMMAND: // å¿µã®ãŸã‚æ®‹ã™
+            DrawResult(command);
 			break;
-		case RECT_COMMAND:
-			RecvRectangleData();
-			break;
-		case DIAMOND_COMMAND:
-			RecvDiamondData();
-			break;
+        
+        /* (CIRCLE, RECT, DIAMOND ã¯å‰Šé™¤) */
+
+        default:
+            // ä¸æ˜ãªã‚³ãƒãƒ³ãƒ‰
+            printf("Unknown command received: %c\n", command);
+            break;
     }
     return endFlag;
 }
 
-/*****************************************************************
-´Ø¿ôÌ¾	: SendRectangleCommand
-µ¡Ç½	: ¥¯¥é¥¤¥¢¥ó¥È¤Ë»Í³Ñ¤òÉ½¼¨¤µ¤»¤ë¤¿¤á¤Ë¡¤
-		  ¥µ¡¼¥Ğ¡¼¤Ë¥Ç¡¼¥¿¤òÁ÷¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
-*****************************************************************/
-void SendRectangleCommand(void)
-{   
-    unsigned char	data[MAX_DATA];
-    int			dataSize;
-
-#ifndef NDEBUG
-    printf("#####\n");
-    printf("SendRectangleCommand()\n");
-#endif
-    dataSize = 0;
-    /* ¥³¥Ş¥ó¥É¤Î¥»¥Ã¥È */
-    SetCharData2DataBlock(data,RECT_COMMAND,&dataSize);
-
-    /* ¥Ç¡¼¥¿¤ÎÁ÷¿® */
-    SendData(data,dataSize);
-}
+/* (SendRectangleCommand, SendCircleCommand ã¯å‰Šé™¤) */
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SendCircleCommand
-µ¡Ç½	: ¥¯¥é¥¤¥¢¥ó¥È¤Ë±ß¤òÉ½¼¨¤µ¤»¤ë¤¿¤á¤Ë¡¤
-		  ¥µ¡¼¥Ğ¡¼¤Ë¥Ç¡¼¥¿¤òÁ÷¤ë
-°ú¿ô	: int		pos	    : ±ß¤òÉ½¼¨¤µ¤»¤ë¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SendJankenCommand
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã«ã˜ã‚ƒã‚“ã‘ã‚“ã®æ‰‹ã‚’é€ä¿¡ã™ã‚‹
+å¼•æ•°	: char handCommand (JANKEN_GOO_COMMAND ãªã©)
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
-void SendCircleCommand(int pos)
+void SendJankenCommand(char handCommand)
 {
     unsigned char	data[MAX_DATA];
     int			dataSize;
 
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
-    assert(0<=pos && pos<MAX_CLIENTS);
-
 #ifndef NDEBUG
     printf("#####\n");
-    printf("SendCircleCommand()\n");
-    printf("Send Circle Command to %d\n",pos);
+    printf("SendJankenCommand()\n");
+    printf("Sending hand: %c\n", handCommand);
 #endif
-
     dataSize = 0;
-    /* ¥³¥Ş¥ó¥É¤Î¥»¥Ã¥È */
-    SetCharData2DataBlock(data,CIRCLE_COMMAND,&dataSize);
-    /* ¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ¤Î¥»¥Ã¥È */
-    SetIntData2DataBlock(data,pos,&dataSize);
+    /* ã‚³ãƒãƒ³ãƒ‰ã®ã‚»ãƒƒãƒˆ */
+    SetCharData2DataBlock(data, handCommand, &dataSize);
 
-    /* ¥Ç¡¼¥¿¤ÎÁ÷¿® */
+    /* ãƒ‡ãƒ¼ã‚¿ã®é€ä¿¡ */
     SendData(data,dataSize);
 }
 
+
 /*****************************************************************
-´Ø¿ôÌ¾	: SendEndCommand
-µ¡Ç½	: ¥×¥í¥°¥é¥à¤Î½ªÎ»¤òÃÎ¤é¤»¤ë¤¿¤á¤Ë¡¤
-		  ¥µ¡¼¥Ğ¡¼¤Ë¥Ç¡¼¥¿¤òÁ÷¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SendEndCommand
+æ©Ÿèƒ½	: ãƒ—ãƒ­ã‚°ãƒ©ãƒ ã®çµ‚äº†ã‚’çŸ¥ã‚‰ã›ã‚‹ãŸã‚ã«ï¼Œ
+		  ã‚µãƒ¼ãƒãƒ¼ã«ãƒ‡ãƒ¼ã‚¿ã‚’é€ã‚‹
+å¼•æ•°	: ãªã—
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 void SendEndCommand(void)
 {
@@ -117,10 +96,10 @@ void SendEndCommand(void)
     printf("SendEndCommand()\n");
 #endif
     dataSize = 0;
-    /* ¥³¥Ş¥ó¥É¤Î¥»¥Ã¥È */
+    /* ã‚³ãƒãƒ³ãƒ‰ã®ã‚»ãƒƒãƒˆ */
     SetCharData2DataBlock(data,END_COMMAND,&dataSize);
 
-    /* ¥Ç¡¼¥¿¤ÎÁ÷¿® */
+    /* ãƒ‡ãƒ¼ã‚¿ã®é€ä¿¡ */
     SendData(data,dataSize);
 }
 
@@ -128,103 +107,47 @@ void SendEndCommand(void)
 static
 *****/
 /*****************************************************************
-´Ø¿ôÌ¾	: SetIntData2DataBlock
-µ¡Ç½	: int ·¿¤Î¥Ç¡¼¥¿¤òÁ÷¿®ÍÑ¥Ç¡¼¥¿¤ÎºÇ¸å¤Ë¥»¥Ã¥È¤¹¤ë
-°ú¿ô	: void		*data		: Á÷¿®ÍÑ¥Ç¡¼¥¿
-		  int		intData		: ¥»¥Ã¥È¤¹¤ë¥Ç¡¼¥¿
-		  int		*dataSize	: Á÷¿®ÍÑ¥Ç¡¼¥¿¤Î¸½ºß¤Î¥µ¥¤¥º
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SetIntData2DataBlock
+æ©Ÿèƒ½	: int å‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®æœ€å¾Œã«ã‚»ãƒƒãƒˆã™ã‚‹
+å¼•æ•°	: void		*data		: é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿
+		  int		intData		: ã‚»ãƒƒãƒˆã™ã‚‹ãƒ‡ãƒ¼ã‚¿
+		  int		*dataSize	: é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®ç¾åœ¨ã®ã‚µã‚¤ã‚º
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 static void SetIntData2DataBlock(void *data,int intData,int *dataSize)
 {
     int tmp;
 
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(data!=NULL);
     assert(0<=(*dataSize));
 
     tmp = htonl(intData);
 
-    /* int ·¿¤Î¥Ç¡¼¥¿¤òÁ÷¿®ÍÑ¥Ç¡¼¥¿¤ÎºÇ¸å¤Ë¥³¥Ô¡¼¤¹¤ë */
+    /* int å‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®æœ€å¾Œã«ã‚³ãƒ”ãƒ¼ã™ã‚‹ */
     memcpy(data + (*dataSize),&tmp,sizeof(int));
-    /* ¥Ç¡¼¥¿¥µ¥¤¥º¤òÁı¤ä¤¹ */
+    /* ãƒ‡ãƒ¼ã‚¿ã‚µã‚¤ã‚ºã‚’å¢—ã‚„ã™ */
     (*dataSize) += sizeof(int);
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SetCharData2DataBlock
-µ¡Ç½	: char ·¿¤Î¥Ç¡¼¥¿¤òÁ÷¿®ÍÑ¥Ç¡¼¥¿¤ÎºÇ¸å¤Ë¥»¥Ã¥È¤¹¤ë
-°ú¿ô	: void		*data		: Á÷¿®ÍÑ¥Ç¡¼¥¿
-		  int		intData		: ¥»¥Ã¥È¤¹¤ë¥Ç¡¼¥¿
-		  int		*dataSize	: Á÷¿®ÍÑ¥Ç¡¼¥¿¤Î¸½ºß¤Î¥µ¥¤¥º
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SetCharData2DataBlock
+æ©Ÿèƒ½	: char å‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®æœ€å¾Œã«ã‚»ãƒƒãƒˆã™ã‚‹
+å¼•æ•°	: void		*data		: é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿
+		  int		intData		: ã‚»ãƒƒãƒˆã™ã‚‹ãƒ‡ãƒ¼ã‚¿
+		  int		*dataSize	: é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®ç¾åœ¨ã®ã‚µã‚¤ã‚º
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 static void SetCharData2DataBlock(void *data,char charData,int *dataSize)
 {
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(data!=NULL);
     assert(0<=(*dataSize));
 
-    /* char ·¿¤Î¥Ç¡¼¥¿¤òÁ÷¿®ÍÑ¥Ç¡¼¥¿¤ÎºÇ¸å¤Ë¥³¥Ô¡¼¤¹¤ë */
+    /* char å‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®æœ€å¾Œã«ã‚³ãƒ”ãƒ¼ã™ã‚‹ */
     *(char *)(data + (*dataSize)) = charData;
-    /* ¥Ç¡¼¥¿¥µ¥¤¥º¤òÁı¤ä¤¹ */
+    /* ãƒ‡ãƒ¼ã‚¿ã‚µã‚¤ã‚ºã‚’å¢—ã‚„ã™ */
     (*dataSize) += sizeof(char);
 }
 
-/*****************************************************************
-´Ø¿ôÌ¾	: RecvCircleData
-µ¡Ç½	: ±ß¤òÉ½¼¨¤¹¤ë¤¿¤á¤Î¥Ç¡¼¥¿¤ò¼õ¿®¤·¡¤É½¼¨¤¹¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
-*****************************************************************/
-static void RecvCircleData(void)
-{
-    int	x,y,r;
-
-    /* ±ß¥³¥Ş¥ó¥É¤ËÂĞ¤¹¤ë°ú¤­¿ô¤ò¼õ¿®¤¹¤ë */
-    RecvIntData(&x);
-    RecvIntData(&y);
-    RecvIntData(&r);
-
-    /* ±ß¤òÉ½¼¨¤¹¤ë */
-    DrawCircle(x,y,r);
-}
-
-/*****************************************************************
-´Ø¿ôÌ¾	: RecvRectangleData
-µ¡Ç½	: »Í³Ñ¤òÉ½¼¨¤¹¤ë¤¿¤á¤Î¥Ç¡¼¥¿¤ò¼õ¿®¤·¡¤É½¼¨¤¹¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
-*****************************************************************/
-static void RecvRectangleData(void)
-{
-    int	x,y,width,height;
-
-    /* »Í³Ñ¥³¥Ş¥ó¥É¤ËÂĞ¤¹¤ë°ú¤­¿ô¤ò¼õ¿®¤¹¤ë */
-    RecvIntData(&x);
-    RecvIntData(&y);
-    RecvIntData(&width);
-    RecvIntData(&height);
-
-    /* »Í³Ñ¤òÉ½¼¨¤¹¤ë */
-    DrawRectangle(x,y,width,height);
-}
-
-/*****************************************************************
-´Ø¿ôÌ¾	: RecviDiamondData
-µ¡Ç½	: É©·Á¤òÉ½¼¨¤¹¤ë¤¿¤á¤Î¥Ç¡¼¥¿¤ò¼õ¿®¤·¡¤É½¼¨¤¹¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
-*****************************************************************/
-static void RecvDiamondData(void)
-{
-    int	x,y,height;
-
-    /* É©·Á¥³¥Ş¥ó¥É¤ËÂĞ¤¹¤ë°ú¤­¿ô¤ò¼õ¿®¤¹¤ë */
-    RecvIntData(&x);
-    RecvIntData(&y);
-    RecvIntData(&height);
-
-    /* É©·Á¤òÉ½¼¨¤¹¤ë */
-    DrawDiamond(x,y,height);
-}
+/* (RecvCircleData, RecvRectangleData, RecvDiamondData ã¯å‰Šé™¤) */

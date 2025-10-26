@@ -1,6 +1,6 @@
 /*****************************************************************
-¥Õ¥¡¥¤¥ëÌ¾	: server_net.c
-µ¡Ç½		: ¥µ¡¼¥Ğ¡¼¤Î¥Í¥Ã¥È¥ï¡¼¥¯½èÍı
+ãƒ•ã‚¡ã‚¤ãƒ«å	: server_net.c
+æ©Ÿèƒ½		: ã‚µãƒ¼ãƒãƒ¼ã®ãƒãƒƒãƒˆãƒ¯ãƒ¼ã‚¯å‡¦ç†
 *****************************************************************/
 
 #include"server_common.h"
@@ -8,18 +8,20 @@
 #include<sys/socket.h>
 #include<netinet/in.h>
 #include<netdb.h>
+#include <unistd.h> // read, write, close
+#include <arpa/inet.h> // ntohl, htonl
 
-/* ¥¯¥é¥¤¥¢¥ó¥È¤òÉ½¤¹¹½Â¤ÂÎ */
+/* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã‚’è¡¨ã™æ§‹é€ ä½“ */
 typedef struct{
 	int		fd;
 	char	name[MAX_NAME_SIZE];
 }CLIENT;
 
-static CLIENT	gClients[MAX_CLIENTS];	/* ¥¯¥é¥¤¥¢¥ó¥È */
-static int	gClientNum;					/* ¥¯¥é¥¤¥¢¥ó¥È¿ô */
+static CLIENT	gClients[MAX_CLIENTS];	/* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆ */
+static int	gClientNum;					/* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•° */
 
-static fd_set	gMask;					/* select()ÍÑ¤Î¥Ş¥¹¥¯ */
-static int	gWidth;						/* gMaskÃæ¤Î¥Á¥§¥Ã¥¯¤¹¤Ù¤­¥Ó¥Ã¥È¿ô */
+static fd_set	gMask;					/* select()ç”¨ã®ãƒã‚¹ã‚¯ */
+static int	gWidth;						/* gMaskä¸­ã®ãƒã‚§ãƒƒã‚¯ã™ã¹ããƒ“ãƒƒãƒˆæ•° */
 
 static int MultiAccept(int request_soc,int num);
 static void Enter(int pos, int fd);
@@ -28,11 +30,11 @@ static void SendAllName(void);
 static int RecvData(int pos,void *data,int dataSize);
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SetUpServer
-µ¡Ç½	: ¥¯¥é¥¤¥¢¥ó¥È¤È¤Î¥³¥Í¥¯¥·¥ç¥ó¤òÀßÎ©¤·¡¤
-		  ¥æ¡¼¥¶¡¼¤ÎÌ¾Á°¤ÎÁ÷¼õ¿®¤ò¹Ô¤¦
-°ú¿ô	: int		num		  : ¥¯¥é¥¤¥¢¥ó¥È¿ô
-½ĞÎÏ	: ¥³¥Í¥¯¥·¥ç¥ó¤Ë¼ºÇÔ¤·¤¿»ş-1,À®¸ù¤·¤¿»ş0
+é–¢æ•°å	: SetUpServer
+æ©Ÿèƒ½	: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã¨ã®ã‚³ãƒã‚¯ã‚·ãƒ§ãƒ³ã‚’è¨­ç«‹ã—ï¼Œ
+		  ãƒ¦ãƒ¼ã‚¶ãƒ¼ã®åå‰ã®é€å—ä¿¡ã‚’è¡Œã†
+å¼•æ•°	: int		num		  : ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•°
+å‡ºåŠ›	: ã‚³ãƒã‚¯ã‚·ãƒ§ãƒ³ã«å¤±æ•—ã—ãŸæ™‚-1,æˆåŠŸã—ãŸæ™‚0
 *****************************************************************/
 int SetUpServer(int num)
 {
@@ -41,7 +43,7 @@ int SetUpServer(int num)
     int                 maxfd;
     int			val = 1;
  
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(0<num && num<=MAX_CLIENTS);
 
     gClientNum = num;
@@ -50,14 +52,14 @@ int SetUpServer(int num)
     server.sin_port = htons(PORT);
     server.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    /* ¥½¥±¥Ã¥È¤òºîÀ®¤¹¤ë */
+    /* ã‚½ã‚±ãƒƒãƒˆã‚’ä½œæˆã™ã‚‹ */
     if((request_soc = socket(AF_INET,SOCK_STREAM,0)) < 0){
 		fprintf(stderr,"Socket allocation failed\n");
 		return -1;
     }
     setsockopt(request_soc,SOL_SOCKET,SO_REUSEADDR,&val,sizeof(val));
 
-    /* ¥½¥±¥Ã¥È¤ËÌ¾Á°¤ò¤Ä¤±¤ë */
+    /* ã‚½ã‚±ãƒƒãƒˆã«åå‰ã‚’ã¤ã‘ã‚‹ */
     if(bind(request_soc,(struct sockaddr*)&server,sizeof(server))==-1){
 		fprintf(stderr,"Cannot bind\n");
 		close(request_soc);
@@ -65,7 +67,7 @@ int SetUpServer(int num)
     }
     fprintf(stderr,"Successfully bind!\n");
     
-    /* ¥¯¥é¥¤¥¢¥ó¥È¤«¤é¤ÎÀÜÂ³Í×µá¤òÂÔ¤Ä */
+    /* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã‹ã‚‰ã®æ¥ç¶šè¦æ±‚ã‚’å¾…ã¤ */
     if(listen(request_soc, gClientNum) == -1){
 		fprintf(stderr,"Cannot listen\n");
 		close(request_soc);
@@ -73,26 +75,26 @@ int SetUpServer(int num)
     }
     fprintf(stderr,"Listen OK\n");
 
-    /* ¥¯¥é¥¤¥¢¥ó¥È¤ÈÀÜÂ³¤¹¤ë */
+    /* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã¨æ¥ç¶šã™ã‚‹ */
     maxfd = MultiAccept(request_soc, gClientNum);
     close(request_soc);
     if(maxfd == -1)return -1;
 
-    /* Á´¥¯¥é¥¤¥¢¥ó¥È¤ÎÁ´¥æ¡¼¥¶¡¼Ì¾¤òÁ÷¤ë */
+    /* å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®å…¨ãƒ¦ãƒ¼ã‚¶ãƒ¼åã‚’é€ã‚‹ */
     SendAllName();
 
-    /* select()¤Î¤¿¤á¤Î¥Ş¥¹¥¯ÃÍ¤òÀßÄê¤¹¤ë */
+    /* select()ã®ãŸã‚ã®ãƒã‚¹ã‚¯å€¤ã‚’è¨­å®šã™ã‚‹ */
     SetMask(maxfd);
 
     return 0;
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SendRecvManager
-µ¡Ç½	: ¥µ¡¼¥Ğ¡¼¤«¤éÁ÷¤é¤ì¤Æ¤­¤¿¥Ç¡¼¥¿¤ò½èÍı¤¹¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¥×¥í¥°¥é¥à½ªÎ»¥³¥Ş¥ó¥É¤¬Á÷¤é¤ì¤Æ¤­¤¿»ş0¤òÊÖ¤¹¡¥
-		  ¤½¤ì°Ê³°¤Ï1¤òÊÖ¤¹
+é–¢æ•°å	: SendRecvManager
+æ©Ÿèƒ½	: ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰é€ã‚‰ã‚Œã¦ããŸãƒ‡ãƒ¼ã‚¿ã‚’å‡¦ç†ã™ã‚‹
+å¼•æ•°	: ãªã—
+å‡ºåŠ›	: ãƒ—ãƒ­ã‚°ãƒ©ãƒ çµ‚äº†ã‚³ãƒãƒ³ãƒ‰ãŒé€ã‚‰ã‚Œã¦ããŸæ™‚0ã‚’è¿”ã™ï¼
+		  ãã‚Œä»¥å¤–ã¯1ã‚’è¿”ã™
 *****************************************************************/
 int SendRecvManager(void)
 {
@@ -102,18 +104,24 @@ int SendRecvManager(void)
     int		endFlag = 1;
 
     readOK = gMask;
-    /* ¥¯¥é¥¤¥¢¥ó¥È¤«¤é¥Ç¡¼¥¿¤¬ÆÏ¤¤¤Æ¤¤¤ë¤«Ä´¤Ù¤ë */
+    /* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã‹ã‚‰ãƒ‡ãƒ¼ã‚¿ãŒå±Šã„ã¦ã„ã‚‹ã‹èª¿ã¹ã‚‹ */
     if(select(gWidth,&readOK,NULL,NULL,NULL) < 0){
-        /* ¥¨¥é¡¼¤¬µ¯¤³¤Ã¤¿ */
+        /* ã‚¨ãƒ©ãƒ¼ãŒèµ·ã“ã£ãŸ */
+         perror("select"); // ã‚¨ãƒ©ãƒ¼å†…å®¹è¡¨ç¤º
         return endFlag;
     }
 
     for(i=0;i<gClientNum;i++){
 		if(FD_ISSET(gClients[i].fd,&readOK)){
-	    	/* ¥¯¥é¥¤¥¢¥ó¥È¤«¤é¥Ç¡¼¥¿¤¬ÆÏ¤¤¤Æ¤¤¤¿ */
-	    	/* ¥³¥Ş¥ó¥É¤òÆÉ¤ß¹ş¤à */
-			RecvData(i,&command,sizeof(char));
-	    	/* ¥³¥Ş¥ó¥É¤ËÂĞ¤¹¤ë½èÍı¤ò¹Ô¤¦ */
+	    	/* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã‹ã‚‰ãƒ‡ãƒ¼ã‚¿ãŒå±Šã„ã¦ã„ãŸ */
+	    	/* ã‚³ãƒãƒ³ãƒ‰ã‚’èª­ã¿è¾¼ã‚€ */
+			int n = RecvData(i,&command,sizeof(char));
+            if (n <= 0) {
+                // ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆãŒåˆ‡æ–­ã—ãŸ
+                fprintf(stderr, "Client %d disconnected.\n", i);
+                command = END_COMMAND; // çµ‚äº†ã‚³ãƒãƒ³ãƒ‰ã¨ã—ã¦æ‰±ã†
+            }
+	    	/* ã‚³ãƒãƒ³ãƒ‰ã«å¯¾ã™ã‚‹å‡¦ç†ã‚’è¡Œã† */
 	    	endFlag = ExecuteCommand(command,i);
 	    	if(endFlag == 0)break;
 		}
@@ -122,46 +130,48 @@ int SendRecvManager(void)
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: RecvIntData
-µ¡Ç½	: ¥¯¥é¥¤¥¢¥ó¥È¤«¤éint·¿¤Î¥Ç¡¼¥¿¤ò¼õ¤±¼è¤ë
-°ú¿ô	: int		pos	        : ¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ
-		  int		*intData	: ¼õ¿®¤·¤¿¥Ç¡¼¥¿
-½ĞÎÏ	: ¼õ¤±¼è¤Ã¤¿¥Ğ¥¤¥È¿ô
+é–¢æ•°å	: RecvIntData
+æ©Ÿèƒ½	: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã‹ã‚‰intå‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’å—ã‘å–ã‚‹
+å¼•æ•°	: int		pos	        : ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆç•ªå·
+		  int		*intData	: å—ä¿¡ã—ãŸãƒ‡ãƒ¼ã‚¿
+å‡ºåŠ›	: å—ã‘å–ã£ãŸãƒã‚¤ãƒˆæ•° (ã‚¨ãƒ©ãƒ¼æ™‚ã¯ 0 or -1)
 *****************************************************************/
 int RecvIntData(int pos,int *intData)
 {
     int n,tmp;
     
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(0<=pos && pos<gClientNum);
     assert(intData!=NULL);
 
     n = RecvData(pos,&tmp,sizeof(int));
-    (*intData) = ntohl(tmp);
+    if (n == sizeof(int)) { // æ­£å¸¸ã«intã‚µã‚¤ã‚ºå—ä¿¡ã§ããŸæ™‚ã®ã¿å¤‰æ›
+        (*intData) = ntohl(tmp);
+    }
     
     return n;
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SendData
-µ¡Ç½	: ¥¯¥é¥¤¥¢¥ó¥È¤Ë¥Ç¡¼¥¿¤òÁ÷¤ë
-°ú¿ô	: int	   pos		: ¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ
-							  ALL_CLIENTS¤¬»ØÄê¤µ¤ì¤¿»ş¤Ë¤ÏÁ´°÷¤ËÁ÷¤ë
-		  void	   *data	: Á÷¤ë¥Ç¡¼¥¿
-		  int	   dataSize	: Á÷¤ë¥Ç¡¼¥¿¤Î¥µ¥¤¥º
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SendData
+æ©Ÿèƒ½	: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã«ãƒ‡ãƒ¼ã‚¿ã‚’é€ã‚‹
+å¼•æ•°	: int	   pos		: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆç•ªå·
+							  ALL_CLIENTSãŒæŒ‡å®šã•ã‚ŒãŸæ™‚ã«ã¯å…¨å“¡ã«é€ã‚‹
+		  void	   *data	: é€ã‚‹ãƒ‡ãƒ¼ã‚¿
+		  int	   dataSize	: é€ã‚‹ãƒ‡ãƒ¼ã‚¿ã®ã‚µã‚¤ã‚º
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 void SendData(int pos,void *data,int dataSize)
 {
     int	i;
    
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
-    assert(0<=pos && pos<gClientNum || pos==ALL_CLIENTS);
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
+    assert((0<=pos && pos<gClientNum) || pos==ALL_CLIENTS);
     assert(data!=NULL);
     assert(0<dataSize);
 
     if(pos == ALL_CLIENTS){
-    	/* Á´¥¯¥é¥¤¥¢¥ó¥È¤Ë¥Ç¡¼¥¿¤òÁ÷¤ë */
+    	/* å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã«ãƒ‡ãƒ¼ã‚¿ã‚’é€ã‚‹ */
 		for(i=0;i<gClientNum;i++){
 			write(gClients[i].fd,data,dataSize);
 		}
@@ -172,10 +182,10 @@ void SendData(int pos,void *data,int dataSize)
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: Ending
-µ¡Ç½	: Á´¥¯¥é¥¤¥¢¥ó¥È¤È¤Î¥³¥Í¥¯¥·¥ç¥ó¤òÀÚÃÇ¤¹¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: Ending
+æ©Ÿèƒ½	: å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã¨ã®ã‚³ãƒã‚¯ã‚·ãƒ§ãƒ³ã‚’åˆ‡æ–­ã™ã‚‹
+å¼•æ•°	: ãªã—
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 void Ending(void)
 {
@@ -189,11 +199,11 @@ void Ending(void)
 static
 *****/
 /*****************************************************************
-´Ø¿ôÌ¾	: MultiAccept
-µ¡Ç½	: ÀÜÂ³Í×µá¤Î¤¢¤Ã¤¿¥¯¥é¥¤¥¢¥ó¥È¤È¤Î¥³¥Í¥¯¥·¥ç¥ó¤òÀßÎ©¤¹¤ë
-°ú¿ô	: int		request_soc	: ¥½¥±¥Ã¥È
-		  int		num     	: ¥¯¥é¥¤¥¢¥ó¥È¿ô
-½ĞÎÏ	: ¥½¥±¥Ã¥È¥Ç¥£¥¹¥¯¥ê¥×¥¿
+é–¢æ•°å	: MultiAccept
+æ©Ÿèƒ½	: æ¥ç¶šè¦æ±‚ã®ã‚ã£ãŸã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã¨ã®ã‚³ãƒã‚¯ã‚·ãƒ§ãƒ³ã‚’è¨­ç«‹ã™ã‚‹
+å¼•æ•°	: int		request_soc	: ã‚½ã‚±ãƒƒãƒˆ
+		  int		num     	: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•°
+å‡ºåŠ›	: ã‚½ã‚±ãƒƒãƒˆãƒ‡ã‚£ã‚¹ã‚¯ãƒªãƒ—ã‚¿ (æœ€å¾Œã«è¿½åŠ ã•ã‚ŒãŸFD)
 *****************************************************************/
 static int MultiAccept(int request_soc,int num)
 {
@@ -201,54 +211,63 @@ static int MultiAccept(int request_soc,int num)
     int	fd;
     
     for(i=0;i<num;i++){
+        printf("Waiting for client %d...\n", i); // å¾…ã¡å—ã‘ä¸­è¡¨ç¤º
 		if((fd = accept(request_soc,NULL,NULL)) == -1){
 			fprintf(stderr,"Accept error\n");
 			for(j=i-1;j>=0;j--)close(gClients[j].fd);
 			return -1;
 		}
+        printf("Client %d accepted (fd=%d).\n", i, fd);
 		Enter(i,fd);
     }
-    return fd;
+    return fd; // æœ€å¾Œã«acceptã—ãŸfdã‚’è¿”ã™
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: Enter
-µ¡Ç½	: ¥¯¥é¥¤¥¢¥ó¥È¤Î¥æ¡¼¥¶¡¼Ì¾¤ò¼õ¿®¤¹¤ë
-°ú¿ô	: int		pos		: ¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ
-		  int		fd		: ¥½¥±¥Ã¥È¥Ç¥£¥¹¥¯¥ê¥×¥¿
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: Enter
+æ©Ÿèƒ½	: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ¦ãƒ¼ã‚¶ãƒ¼åã‚’å—ä¿¡ã™ã‚‹
+å¼•æ•°	: int		pos		: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆç•ªå·
+		  int		fd		: ã‚½ã‚±ãƒƒãƒˆãƒ‡ã‚£ã‚¹ã‚¯ãƒªãƒ—ã‚¿
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 static void Enter(int pos, int fd)
 {
-	/* ¥¯¥é¥¤¥¢¥ó¥È¤Î¥æ¡¼¥¶¡¼Ì¾¤ò¼õ¿®¤¹¤ë */
+	/* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ¦ãƒ¼ã‚¶ãƒ¼åã‚’å—ä¿¡ã™ã‚‹ */
 	read(fd,gClients[pos].name,MAX_NAME_SIZE);
 #ifndef NDEBUG
-	printf("%s is accepted\n",gClients[pos].name);
+	printf("%s is accepted (pos=%d)\n",gClients[pos].name, pos);
 #endif
 	gClients[pos].fd = fd;
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SetMask
-µ¡Ç½	: int		maxfd	: ¥½¥±¥Ã¥È¥Ç¥£¥¹¥¯¥ê¥×¥¿¤ÎºÇÂçÃÍ
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SetMask
+æ©Ÿèƒ½	: int		maxfd	: ã‚½ã‚±ãƒƒãƒˆãƒ‡ã‚£ã‚¹ã‚¯ãƒªãƒ—ã‚¿ã®æœ€å¤§å€¤
+å¼•æ•°	: ãªã—
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 static void SetMask(int maxfd)
 {
     int	i;
 
-    gWidth = maxfd+1;
-
+    // maxfd ã§ã¯ãªãã€FD ã®æœ€å¤§å€¤ã‚’å†è¨ˆç®—ã™ã‚‹
+    // (MultiAccept ã¯æœ€å¾Œã«æ¥ç¶šã—ãŸFDã—ã‹è¿”ã•ãªã„ãŸã‚)
+    gWidth = 0; 
     FD_ZERO(&gMask);    
-    for(i=0;i<gClientNum;i++)FD_SET(gClients[i].fd,&gMask);
+    for(i=0;i<gClientNum;i++){
+        FD_SET(gClients[i].fd,&gMask);
+        if (gClients[i].fd > gWidth) {
+            gWidth = gClients[i].fd;
+        }
+    }
+    gWidth++; // select ã® width ã¯ (æœ€å¤§FD + 1)
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SendAllName
-µ¡Ç½	: Á´¥¯¥é¥¤¥¢¥ó¥È¤ËÁ´¥æ¡¼¥¶¡¼Ì¾¤òÁ÷¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SendAllName
+æ©Ÿèƒ½	: å…¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã«å…¨ãƒ¦ãƒ¼ã‚¶ãƒ¼åã‚’é€ã‚‹
+å¼•æ•°	: ãªã—
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 static void SendAllName(void)
 {
@@ -256,7 +275,7 @@ static void SendAllName(void)
 
     tmp2 = htonl(gClientNum);
     for(i=0;i<gClientNum;i++){
-		tmp1 = htonl(i);
+		tmp1 = htonl(i); // ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆID
 		SendData(i,&tmp1,sizeof(int));
 		SendData(i,&tmp2,sizeof(int));
 		for(j=0;j<gClientNum;j++){
@@ -266,18 +285,18 @@ static void SendAllName(void)
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: RecvData
-µ¡Ç½	: ¥¯¥é¥¤¥¢¥ó¥È¤«¤é¥Ç¡¼¥¿¤ò¼õ¤±¼è¤ë
-°ú¿ô	: int		pos	        : ¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ
-		  void		*data		: ¼õ¿®¤·¤¿¥Ç¡¼¥¿
-		  int		dataSize	: ¼õ¿®¤¹¤ë¥Ç¡¼¥¿¤Î¥µ¥¤¥º
-½ĞÎÏ	: ¼õ¤±¼è¤Ã¤¿¥Ğ¥¤¥È¿ô
+é–¢æ•°å	: RecvData
+æ©Ÿèƒ½	: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã‹ã‚‰ãƒ‡ãƒ¼ã‚¿ã‚’å—ã‘å–ã‚‹
+å¼•æ•°	: int		pos	        : ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆç•ªå·
+		  void		*data		: å—ä¿¡ã—ãŸãƒ‡ãƒ¼ã‚¿
+		  int		dataSize	: å—ä¿¡ã™ã‚‹ãƒ‡ãƒ¼ã‚¿ã®ã‚µã‚¤ã‚º
+å‡ºåŠ›	: å—ã‘å–ã£ãŸãƒã‚¤ãƒˆæ•° (åˆ‡æ–­ãƒ»ã‚¨ãƒ©ãƒ¼æ™‚ã¯ 0 or -1)
 *****************************************************************/
 static int RecvData(int pos,void *data,int dataSize)
 {
     int n;
     
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(0<=pos && pos<gClientNum);
     assert(data!=NULL);
     assert(0<dataSize);

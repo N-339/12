@@ -1,172 +1,198 @@
 /*****************************************************************
-¥Õ¥¡¥¤¥ëÌ¾	: server_command.c
-µ¡Ç½		: ¥µ¡¼¥Ğ¡¼¤Î¥³¥Ş¥ó¥É½èÍı
+ãƒ•ã‚¡ã‚¤ãƒ«å	: server_command.c
+æ©Ÿèƒ½		: ã‚µãƒ¼ãƒãƒ¼ã®ã‚³ãƒãƒ³ãƒ‰å‡¦ç†
 *****************************************************************/
 
 #include"server_common.h"
 #include"server_func.h"
+#include <arpa/inet.h> // htonl
+#include <unistd.h> // read, write, close
 
 static void SetIntData2DataBlock(void *data,int intData,int *dataSize);
 static void SetCharData2DataBlock(void *data,char charData,int *dataSize);
-static int GetRandomInt(int n);
+// static int GetRandomInt(int n); // ä¹±æ•°ã‚’ä½¿ã‚ãªã„ã®ã§å‰Šé™¤
+
+/* 2äººã®ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®æ‰‹ã‚’ä¿å­˜ã™ã‚‹é…åˆ— */
+/* 0 = æœªå—ä¿¡, G = ã‚°ãƒ¼, C = ãƒãƒ§ã‚­, P = ãƒ‘ãƒ¼ */
+static char gClientHands[MAX_CLIENTS] = {0, 0};
+
+static void JudgeAndSendResult(void);
 
 /*****************************************************************
-´Ø¿ôÌ¾	: ExecuteCommand
-µ¡Ç½	: ¥¯¥é¥¤¥¢¥ó¥È¤«¤éÁ÷¤é¤ì¤Æ¤­¤¿¥³¥Ş¥ó¥É¤ò¸µ¤Ë¡¤
-		  °ú¤­¿ô¤ò¼õ¿®¤·¡¤¼Â¹Ô¤¹¤ë
-°ú¿ô	: char	command		: ¥³¥Ş¥ó¥É
-		  int	pos			: ¥³¥Ş¥ó¥É¤òÁ÷¤Ã¤¿¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ
-½ĞÎÏ	: ¥×¥í¥°¥é¥à½ªÎ»¥³¥Ş¥ó¥É¤¬Á÷¤é¤ì¤Æ¤­¤¿»ş¤Ë¤Ï0¤òÊÖ¤¹¡¥
-		  ¤½¤ì°Ê³°¤Ï1¤òÊÖ¤¹
+é–¢æ•°å	: ExecuteCommand
+æ©Ÿèƒ½	: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã‹ã‚‰é€ã‚‰ã‚Œã¦ããŸã‚³ãƒãƒ³ãƒ‰ã‚’å…ƒã«ï¼Œ
+		  å¼•ãæ•°ã‚’å—ä¿¡ã—ï¼Œå®Ÿè¡Œã™ã‚‹
+å¼•æ•°	: char	command		: ã‚³ãƒãƒ³ãƒ‰
+		  int	pos			: ã‚³ãƒãƒ³ãƒ‰ã‚’é€ã£ãŸã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆç•ªå· (0 or 1)
+å‡ºåŠ›	: ãƒ—ãƒ­ã‚°ãƒ©ãƒ çµ‚äº†ã‚³ãƒãƒ³ãƒ‰ãŒé€ã‚‰ã‚Œã¦ããŸæ™‚ã«ã¯0ã‚’è¿”ã™ï¼
+		  ãã‚Œä»¥å¤–ã¯1ã‚’è¿”ã™
 *****************************************************************/
 int ExecuteCommand(char command,int pos)
 {
     unsigned char	data[MAX_DATA];
-    int			dataSize,intData;
+    int			dataSize;
     int			endFlag = 1;
 
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(0<=pos && pos<MAX_CLIENTS);
 
 #ifndef NDEBUG
     printf("#####\n");
     printf("ExecuteCommand()\n");
-    printf("Get command %c\n",command);
+    printf("Client %d sent command %c\n", pos, command);
 #endif
     switch(command){
 	    case END_COMMAND:
 			dataSize = 0;
-			/* ¥³¥Ş¥ó¥É¤Î¥»¥Ã¥È */
+			/* ã‚³ãƒãƒ³ãƒ‰ã®ã‚»ãƒƒãƒˆ */
 			SetCharData2DataBlock(data,command,&dataSize);
 
-			/* Á´¥æ¡¼¥¶¡¼¤ËÁ÷¤ë */
+			/* å…¨ãƒ¦ãƒ¼ã‚¶ãƒ¼ã«é€ã‚‹ */
 			SendData(ALL_CLIENTS,data,dataSize);
 
 			endFlag = 0;
 			break;
-	    case CIRCLE_COMMAND:
-			/* ±ß¤òÉ½¼¨¤¹¤ë¥¯¥é¥¤¥¢¥ó¥ÈÈÖ¹æ¤ò¼õ¿®¤¹¤ë */
-			RecvIntData(pos,&intData);
+        
+        /* ã˜ã‚ƒã‚“ã‘ã‚“ã®æ‰‹ã‚’å—ä¿¡ */
+	    case JANKEN_GOO_COMMAND:
+        case JANKEN_CHOKI_COMMAND:
+        case JANKEN_PAR_COMMAND:
+            // æ—¢ã«æ‰‹ã‚’å—ä¿¡æ¸ˆã¿ã®å ´åˆã¯ç„¡è¦– (ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆå´ã§åˆ¶å¾¡ã—ã¦ã‚‹ã¯ãšã ãŒå¿µã®ãŸã‚)
+            if (gClientHands[pos] != 0) {
+#ifndef NDEBUG
+                printf("Client %d already sent hand. Ignoring.\n", pos);
+#endif
+                break;
+            }
 
-			dataSize = 0;
-			/* ¥³¥Ş¥ó¥É¤Î¥»¥Ã¥È */
-			SetCharData2DataBlock(data,command,&dataSize);
-			/* º¸¾å¤Î x ºÂÉ¸¤Î¥»¥Ã¥È */
-			SetIntData2DataBlock(data,GetRandomInt(500),&dataSize);
-			/* º¸¾å¤Î y ºÂÉ¸¤Î¥»¥Ã¥È */
-			SetIntData2DataBlock(data,GetRandomInt(300),&dataSize);
-			/* Ä¾·Â¤Î¥»¥Ã¥È */
-			SetIntData2DataBlock(data,GetRandomInt(100),&dataSize);
+            // æ‰‹ã‚’ä¿å­˜
+            gClientHands[pos] = command;
 
-			/* »ØÄê¤µ¤ì¤¿¥¯¥é¥¤¥¢¥ó¥È¤ËÁ÷¤ë */
-			SendData(intData,data,dataSize);
+            // 2äººåˆ†ã®æ‰‹ãŒæƒã£ãŸã‹ãƒã‚§ãƒƒã‚¯
+            if (gClientHands[0] != 0 && gClientHands[1] != 0) {
+                // æƒã£ãŸã‚‰åˆ¤å®šã—ã¦çµæœé€ä¿¡
+                JudgeAndSendResult();
+            } else {
+                // æƒã£ã¦ãªã„å ´åˆ (ç‰‡æ–¹ã ã‘ãŒé€ä¿¡ã—ãŸ)
+                // (ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆå´ã§ã€Œç›¸æ‰‹å¾…ã¡ã€ã‚’è¡¨ç¤ºã—ã¦ã„ã‚‹ã®ã§ã‚µãƒ¼ãƒãƒ¼ã‹ã‚‰ã¯é€ã‚‰ãªã„)
+#ifndef NDEBUG
+                printf("Waiting for other client's hand.\n");
+#endif
+            }
 			break;
-	    case RECT_COMMAND:
-			dataSize = 0;
-			/* ¥³¥Ş¥ó¥É¤Î¥»¥Ã¥È */
-			SetCharData2DataBlock(data,command,&dataSize);
-			/* »Í³Ñ¤Îº¸¾å¤Î x ºÂÉ¸ */
-			SetIntData2DataBlock(data,GetRandomInt(500),&dataSize);
-			/* »Í³Ñ¤Îº¸¾å¤Î y ºÂÉ¸ */
-			SetIntData2DataBlock(data,GetRandomInt(300),&dataSize);
-			/* »Í³Ñ¤Î²£Éı */
-			SetIntData2DataBlock(data,GetRandomInt(100),&dataSize);
-			/* »Í³Ñ¤Î¹â¤µ */
-			SetIntData2DataBlock(data,GetRandomInt(100),&dataSize);
+        
+        /* (CIRCLE, RECT ã¯å‰Šé™¤) */
 
-			/* Á´¥æ¡¼¥¶¡¼¤ËÁ÷¤ë */
-			SendData(ALL_CLIENTS,data,dataSize);
-			break;
 	    default:
-			/* Ì¤ÃÎ¤Î¥³¥Ş¥ó¥É¤¬Á÷¤é¤ì¤Æ¤­¤¿ */
-			fprintf(stderr,"0x%02x is not command!\n",command);
+			/* æœªçŸ¥ã®ã‚³ãƒãƒ³ãƒ‰ãŒé€ã‚‰ã‚Œã¦ããŸ */
+			fprintf(stderr,"Client %d sent unknown command: 0x%02x\n", pos, command);
     }
     return endFlag;
 }
 
-/*****************************************************************
-´Ø¿ôÌ¾	: SendDiamondCommand
-µ¡Ç½	: ¥¯¥é¥¤¥¢¥ó¥È¤ËÉ©·Á¤òÉ½¼¨¤µ¤»¤ë¤¿¤á¤Ë¥Ç¡¼¥¿¤òÁ÷¤ë
-°ú¿ô	: ¤Ê¤·
-½ĞÎÏ	: ¤Ê¤·
-*****************************************************************/
-void SendDiamondCommand(void)
-{
-    unsigned char data[MAX_DATA];
-    int           dataSize;
+/* (SendDiamondCommand ã¯å‰Šé™¤) */
 
-#ifndef NDEBUG
-    printf("#####\n");
-    printf("SendDiamondCommand\n");
-#endif
-    dataSize = 0;
-    /* ¥³¥Ş¥ó¥É¤Î¥»¥Ã¥È */
-    SetCharData2DataBlock(data,DIAMOND_COMMAND,&dataSize);
-    /* É©·Á¤Îº¸¾å¤Î x ºÂÉ¸ */
-    SetIntData2DataBlock(data,GetRandomInt(500),&dataSize);
-    /* É©·Á¤Îº¸¾å¤Î y ºÂÉ¸ */
-    SetIntData2DataBlock(data,GetRandomInt(300),&dataSize);
-    /* É©·Á¤Î¹â¤µ */
-    SetIntData2DataBlock(data,GetRandomInt(100),&dataSize);
-
-    /* ¥¯¥é¥¤¥¢¥ó¥È¤ËÁ÷¤ë */
-    SendData(ALL_CLIENTS,data,dataSize);
-}
 
 /*****
 static
 *****/
+
 /*****************************************************************
-´Ø¿ôÌ¾	: SetIntData2DataBlock
-µ¡Ç½	: int ·¿¤Î¥Ç¡¼¥¿¤òÁ÷¿®ÍÑ¥Ç¡¼¥¿¤ÎºÇ¸å¤Ë¥»¥Ã¥È¤¹¤ë
-°ú¿ô	: void		*data		: Á÷¿®ÍÑ¥Ç¡¼¥¿
-		  int		intData		: ¥»¥Ã¥È¤¹¤ë¥Ç¡¼¥¿
-		  int		*dataSize	: Á÷¿®ÍÑ¥Ç¡¼¥¿¤Î¸½ºß¤Î¥µ¥¤¥º
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: JudgeAndSendResult
+æ©Ÿèƒ½	: 2äººã®æ‰‹ã‚’åˆ¤å®šã—ï¼Œçµæœã‚’ä¸¡ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã«é€ä¿¡ã™ã‚‹
+å¼•æ•°	: ãªã— (staticå¤‰æ•° gClientHands ã‚’å‚ç…§)
+å‡ºåŠ›	: ãªã—
+*****************************************************************/
+static void JudgeAndSendResult(void)
+{
+    char hand0 = gClientHands[0];
+    char hand1 = gClientHands[1];
+    char result0, result1; // Client 0 ã¨ 1 ã®çµæœ
+
+#ifndef NDEBUG
+    printf("Judging: Client 0 [%c] vs Client 1 [%c]\n", hand0, hand1);
+#endif
+
+    if (hand0 == hand1) {
+        // ã‚ã„ã“
+        result0 = RESULT_DRAW_COMMAND;
+        result1 = RESULT_DRAW_COMMAND;
+    } else if ( (hand0 == JANKEN_GOO_COMMAND && hand1 == JANKEN_CHOKI_COMMAND) ||
+                (hand0 == JANKEN_CHOKI_COMMAND && hand1 == JANKEN_PAR_COMMAND) ||
+                (hand0 == JANKEN_PAR_COMMAND && hand1 == JANKEN_GOO_COMMAND) ) {
+        // Client 0 ã®å‹ã¡
+        result0 = RESULT_WIN_COMMAND;
+        result1 = RESULT_LOSE_COMMAND;
+    } else {
+        // Client 1 ã®å‹ã¡ (ä¸Šè¨˜ä»¥å¤–ã®çµ„ã¿åˆã‚ã›)
+        result0 = RESULT_LOSE_COMMAND;
+        result1 = RESULT_WIN_COMMAND;
+    }
+
+    // --- Client 0 ã«çµæœé€ä¿¡ ---
+    unsigned char data0[MAX_DATA];
+    int dataSize0 = 0;
+    SetCharData2DataBlock(data0, result0, &dataSize0);
+    SendData(0, data0, dataSize0); // Client 0 ã¸é€ä¿¡
+
+    // --- Client 1 ã«çµæœé€ä¿¡ ---
+    unsigned char data1[MAX_DATA];
+    int dataSize1 = 0;
+    SetCharData2DataBlock(data1, result1, &dataSize1);
+    SendData(1, data1, dataSize1); // Client 1 ã¸é€ä¿¡
+
+#ifndef NDEBUG
+    printf("Result sent: Client 0 [%c], Client 1 [%c]\n", result0, result1);
+#endif
+
+    // æ¬¡ã®å‹è² ã®ãŸã‚ã«æ‰‹ã‚’ãƒªã‚»ãƒƒãƒˆ
+    gClientHands[0] = 0;
+    gClientHands[1] = 0;
+}
+
+
+/*****************************************************************
+é–¢æ•°å	: SetIntData2DataBlock
+æ©Ÿèƒ½	: int å‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®æœ€å¾Œã«ã‚»ãƒƒãƒˆã™ã‚‹
+å¼•æ•°	: void		*data		: é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿
+		  int		intData		: ã‚»ãƒƒãƒˆã™ã‚‹ãƒ‡ãƒ¼ã‚¿
+		  int		*dataSize	: é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®ç¾åœ¨ã®ã‚µã‚¤ã‚º
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 static void SetIntData2DataBlock(void *data,int intData,int *dataSize)
 {
     int tmp;
 
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(data!=NULL);
     assert(0<=(*dataSize));
 
     tmp = htonl(intData);
 
-    /* int ·¿¤Î¥Ç¡¼¥¿¤òÁ÷¿®ÍÑ¥Ç¡¼¥¿¤ÎºÇ¸å¤Ë¥³¥Ô¡¼¤¹¤ë */
+    /* int å‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®æœ€å¾Œã«ã‚³ãƒ”ãƒ¼ã™ã‚‹ */
     memcpy(data + (*dataSize),&tmp,sizeof(int));
-    /* ¥Ç¡¼¥¿¥µ¥¤¥º¤òÁı¤ä¤¹ */
+    /* ãƒ‡ãƒ¼ã‚¿ã‚µã‚¤ã‚ºã‚’å¢—ã‚„ã™ */
     (*dataSize) += sizeof(int);
 }
 
 /*****************************************************************
-´Ø¿ôÌ¾	: SetCharData2DataBlock
-µ¡Ç½	: char ·¿¤Î¥Ç¡¼¥¿¤òÁ÷¿®ÍÑ¥Ç¡¼¥¿¤ÎºÇ¸å¤Ë¥»¥Ã¥È¤¹¤ë
-°ú¿ô	: void		*data		: Á÷¿®ÍÑ¥Ç¡¼¥¿
-		  int		intData		: ¥»¥Ã¥È¤¹¤ë¥Ç¡¼¥¿
-		  int		*dataSize	: Á÷¿®ÍÑ¥Ç¡¼¥¿¤Î¸½ºß¤Î¥µ¥¤¥º
-½ĞÎÏ	: ¤Ê¤·
+é–¢æ•°å	: SetCharData2DataBlock
+æ©Ÿèƒ½	: char å‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®æœ€å¾Œã«ã‚»ãƒƒãƒˆã™ã‚‹
+å¼•æ•°	: void		*data		: é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿
+		  int		intData		: ã‚»ãƒƒãƒˆã™ã‚‹ãƒ‡ãƒ¼ã‚¿
+		  int		*dataSize	: é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®ç¾åœ¨ã®ã‚µã‚¤ã‚º
+å‡ºåŠ›	: ãªã—
 *****************************************************************/
 static void SetCharData2DataBlock(void *data,char charData,int *dataSize)
 {
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     assert(data!=NULL);
     assert(0<=(*dataSize));
 
-    /* int ·¿¤Î¥Ç¡¼¥¿¤òÁ÷¿®ÍÑ¥Ç¡¼¥¿¤ÎºÇ¸å¤Ë¥³¥Ô¡¼¤¹¤ë */
+    /* int å‹ã®ãƒ‡ãƒ¼ã‚¿ã‚’é€ä¿¡ç”¨ãƒ‡ãƒ¼ã‚¿ã®æœ€å¾Œã«ã‚³ãƒ”ãƒ¼ã™ã‚‹ */
     *(char *)(data + (*dataSize)) = charData;
-    /* ¥Ç¡¼¥¿¥µ¥¤¥º¤òÁı¤ä¤¹ */
+    /* ãƒ‡ãƒ¼ã‚¿ã‚µã‚¤ã‚ºã‚’å¢—ã‚„ã™ */
     (*dataSize) += sizeof(char);
 }
 
-/*****************************************************************
-´Ø¿ôÌ¾	: GetRandomInt
-µ¡Ç½	: À°¿ô¤ÎÍğ¿ô¤òÆÀ¤ë
-°ú¿ô	: int		n	: Íğ¿ô¤ÎºÇÂçÃÍ
-½ĞÎÏ	: Íğ¿ôÃÍ
-*****************************************************************/
-static int GetRandomInt(int n)
-{
-    return rand()%n;
-}
+/* (GetRandomInt ã¯å‰Šé™¤) */

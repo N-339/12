@@ -1,64 +1,48 @@
 /*****************************************************************
-¥Õ¥¡¥¤¥ëÌ¾	: server_main.c
-µ¡Ç½		: ¥µ¡¼¥Ğ¡¼¤Î¥á¥¤¥ó¥ë¡¼¥Á¥ó
+ãƒ•ã‚¡ã‚¤ãƒ«å	: server_main.c
+æ©Ÿèƒ½		: ã‚µãƒ¼ãƒãƒ¼ã®ãƒ¡ã‚¤ãƒ³ãƒ«ãƒ¼ãƒãƒ³
 *****************************************************************/
 
-#include<SDL2/SDL.h>
+// #include<SDL2/SDL.h> // SDLã‚¿ã‚¤ãƒãƒ¼ã‚’ä½¿ã‚ãªã„ã®ã§ä¸è¦
 #include"server_common.h"
+#include"server_func.h" // Ending, SendRecvManager, SetUpServer
 
-static Uint32 SignalHandler(Uint32 interval, void *param);
+// static Uint32 SignalHandler(Uint32 interval, void *param); // å‰Šé™¤
 
 int main(int argc,char *argv[])
 {
 	int	num;
 	int	endFlag = 1;
 
-	/* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
-	if(argc != 2){
-		fprintf(stderr,"Usage: number of clients\n");
-		exit(-1);
+	/* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ (ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•°ã‚’2ã«å›ºå®š) */
+	if(argc != 1){ // å¼•æ•°ä¸è¦
+		fprintf(stderr,"Usage: %s (No arguments required. Clients = 2)\n", argv[0]);
+		// exit(-1); // è­¦å‘Šã®ã¿ã§ç¶šè¡Œã—ã¦ã‚‚ã‚ˆã„
 	}
-	if((num = atoi(argv[1])) < 0 ||  num > MAX_CLIENTS){
-		fprintf(stderr,"clients limit = %d \n",MAX_CLIENTS);
-		exit(-1);
-	}
+    
+    num = MAX_CLIENTS; // common.h ã§ 2 ã«å®šç¾©
 	
-	/* SDL¤Î½é´ü²½ */
-	if(SDL_Init(SDL_INIT_TIMER) < 0) {
-		printf("failed to initialize SDL.\n");
-		exit(-1);
-	}
+	/* (SDLã®åˆæœŸåŒ–ã¯å‰Šé™¤) */
 
-	/* ¥¯¥é¥¤¥¢¥ó¥È¤È¤ÎÀÜÂ³ */
+	/* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã¨ã®æ¥ç¶š */
 	if(SetUpServer(num) == -1){
 		fprintf(stderr,"Cannot setup server\n");
 		exit(-1);
 	}
 	
-	/* ³ä¤ê¹ş¤ß½èÍı¤Î¥»¥Ã¥È */
-	SDL_AddTimer(5000,SignalHandler,NULL);
+	/* (å‰²ã‚Šè¾¼ã¿å‡¦ç†ã®ã‚»ãƒƒãƒˆã¯å‰Šé™¤) */
 	
-	/* ¥á¥¤¥ó¥¤¥Ù¥ó¥È¥ë¡¼¥× */
+    printf("Janken server started. Waiting for %d clients...\n", num);
+
+	/* ãƒ¡ã‚¤ãƒ³ã‚¤ãƒ™ãƒ³ãƒˆãƒ«ãƒ¼ãƒ— */
 	while(endFlag){
 		endFlag = SendRecvManager();
 	};
 
-	/* ½ªÎ»½èÍı */
+	/* çµ‚äº†å‡¦ç† */
 	Ending();
 
 	return 0;
 }
 
-/*****************************************************************
-´Ø¿ôÌ¾  : SignalHandler
-µ¡Ç½    : ³ä¤ê¹ş¤ßÍÑ´Ø¿ô 
-°ú¿ô    : Uint32	interval	: ¥¿¥¤¥Ş¡¼
-		  void		*param		: ³ä¤ê¹ş¤ß½èÍı¤Î°ú¿ô
-½ĞÎÏ    : ¥¿¥¤¥Ş¡¼¤Î¼¡¤Î´Ö³Ö
-*****************************************************************/
-static Uint32 SignalHandler(Uint32 interval, void *param)
-{
-	SendDiamondCommand();
-
-	return interval;
-}
+/* (SignalHandler ã¯å‰Šé™¤) */

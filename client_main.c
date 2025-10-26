@@ -1,6 +1,6 @@
 /*****************************************************************
-¥Õ¥¡¥¤¥ëÌ¾	: client_main.c
-µ¡Ç½		: ¥¯¥é¥¤¥¢¥ó¥È¤Î¥á¥¤¥ó¥ë¡¼¥Á¥ó
+ãƒ•ã‚¡ã‚¤ãƒ«å	: client_main.c
+æ©Ÿèƒ½		: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ¡ã‚¤ãƒ³ãƒ«ãƒ¼ãƒãƒ³
 *****************************************************************/
 
 #include"common.h"
@@ -15,7 +15,7 @@ int main(int argc,char *argv[])
     char	*serverName;
     int		clientID;
 
-    /* °ú¤­¿ô¥Á¥§¥Ã¥¯ */
+    /* å¼•ãæ•°ãƒã‚§ãƒƒã‚¯ */
     if(argc == 1){
     	serverName = localHostName;
     }
@@ -23,28 +23,28 @@ int main(int argc,char *argv[])
     	serverName = argv[1];
     }
     else{
-		fprintf(stderr, "Usage: %s, Cannot find a Server Name.\n", argv[0]);
+		fprintf(stderr, "Usage: %s [Server Name]\n", argv[0]); // ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã‚’ä¿®æ­£
 		return -1;
     }
 
-    /* ¥µ¡¼¥Ğ¡¼¤È¤ÎÀÜÂ³ */
+    /* ã‚µãƒ¼ãƒãƒ¼ã¨ã®æ¥ç¶š */
     if(SetUpClient(serverName,&clientID,&num,name)==-1){
 		fprintf(stderr,"setup failed : SetUpClient\n");
 		return -1;
 	}
-    /* ¥¦¥¤¥ó¥É¥¦¤Î½é´ü²½ */
+    /* ã‚¦ã‚¤ãƒ³ãƒ‰ã‚¦ã®åˆæœŸåŒ– */
 	if(InitWindows(clientID,num,name)==-1){
 		fprintf(stderr,"setup failed : InitWindows\n");
 		return -1;
 	}
 
-    /* ¥á¥¤¥ó¥¤¥Ù¥ó¥È¥ë¡¼¥× */
+    /* ãƒ¡ã‚¤ãƒ³ã‚¤ãƒ™ãƒ³ãƒˆãƒ«ãƒ¼ãƒ— */
     while(endFlag){
 		WindowEvent(num);
 		endFlag = SendRecvManager();
     };
 
-    /* ½ªÎ»½èÍı */
+    /* çµ‚äº†å‡¦ç† */
 	DestroyWindow();
 	CloseSoc();
 

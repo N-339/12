@@ -1,6 +1,6 @@
 /*****************************************************************
-¥Õ¥¡¥¤¥ëÌ¾	: common.h
-µ¡Ç½		: ¥µ¡¼¥Ğ¡¼¤È¥¯¥é¥¤¥¢¥ó¥È¤Ç»ÈÍÑ¤¹¤ëÄê¿ô¤ÎÀë¸À¤ò¹Ô¤¦
+ãƒ•ã‚¡ã‚¤ãƒ«å	: common.h
+æ©Ÿèƒ½		: ã‚µãƒ¼ãƒãƒ¼ã¨ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã§ä½¿ç”¨ã™ã‚‹å®šæ•°ã®å®£è¨€ã‚’è¡Œã†
 *****************************************************************/
 
 #ifndef _COMMON_H_
@@ -12,17 +12,29 @@
 #include<sys/types.h>
 #include<assert.h>
 #include<math.h>
+// #include<unistd.h> // client_net.c, server_net.c ã§ read/write/close ã®ãŸã‚ã«å¿…è¦
+// #include<netinet/in.h> // client_net.c, server_net.c ã§å¿…è¦
+// #include<arpa/inet.h> // client_command.c, server_command.c ã§ htonl/ntohl ã®ãŸã‚ã«å¿…è¦
 
-#define PORT			(u_short)8888	/* ¥İ¡¼¥ÈÈÖ¹æ */
+#define PORT			(u_short)8888	/* ãƒãƒ¼ãƒˆç•ªå· */
 
-#define MAX_CLIENTS		4				/* ¥¯¥é¥¤¥¢¥ó¥È¿ô¤ÎºÇÂçÃÍ */
-#define MAX_NAME_SIZE	10 				/* ¥æ¡¼¥¶¡¼Ì¾¤ÎºÇÂçÃÍ*/
+#define MAX_CLIENTS		2				/* ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆæ•°ã®æœ€å¤§å€¤ (2ã«å›ºå®š) */
+#define MAX_NAME_SIZE	10 				/* ãƒ¦ãƒ¼ã‚¶ãƒ¼åã®æœ€å¤§å€¤*/
 
-#define MAX_DATA		200				/* Á÷¼õ¿®¤¹¤ë¥Ç¡¼¥¿¤ÎºÇÂçÃÍ */
+#define MAX_DATA		200				/* é€å—ä¿¡ã™ã‚‹ãƒ‡ãƒ¼ã‚¿ã®æœ€å¤§å€¤ */
 
-#define END_COMMAND		'E'		  		/* ¥×¥í¥°¥é¥à½ªÎ»¥³¥Ş¥ó¥É */
-#define CIRCLE_COMMAND	'C'				/* ±ßÉ½¼¨¥³¥Ş¥ó¥É */
-#define RECT_COMMAND	'R'				/* »Í³ÑÉ½¼¨¥³¥Ş¥ó¥É */
-#define DIAMOND_COMMAND	'D'				/* É©·ÁÉ½¼¨¥³¥Ş¥ó¥É */
+/* ã‚³ãƒãƒ³ãƒ‰å®šç¾© */
+#define END_COMMAND		'E'		  		/* ãƒ—ãƒ­ã‚°ãƒ©ãƒ çµ‚äº†ã‚³ãƒãƒ³ãƒ‰ */
+
+/* ã˜ã‚ƒã‚“ã‘ã‚“ã®æ‰‹ã‚³ãƒãƒ³ãƒ‰ (ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆ -> ã‚µãƒ¼ãƒãƒ¼) */
+#define JANKEN_GOO_COMMAND	'G'			/* ã‚°ãƒ¼ */
+#define JANKEN_CHOKI_COMMAND	'C'			/* ãƒãƒ§ã‚­ */
+#define JANKEN_PAR_COMMAND	'P'			/* ãƒ‘ãƒ¼ */
+
+/* ã˜ã‚ƒã‚“ã‘ã‚“ã®çµæœã‚³ãƒãƒ³ãƒ‰ (ã‚µãƒ¼ãƒãƒ¼ -> ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆ) */
+#define RESULT_WIN_COMMAND	'W'			/* å‹ã¡ */
+#define RESULT_LOSE_COMMAND	'L'			/* è² ã‘ */
+#define RESULT_DRAW_COMMAND	'D'			/* ã‚ã„ã“ */
+#define RESULT_WAIT_COMMAND 'S'         /* ç›¸æ‰‹å¾…ã¡ */
 
 #endif
