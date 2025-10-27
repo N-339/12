@@ -27,9 +27,9 @@
 #define END_COMMAND		'E'		  		/* プログラム終了コマンド */
 
 /* じゃんけんの手コマンド (クライアント -> サーバー) */
-#define JANKEN_GOO_COMMAND	'G'			/* グー */
-#define JANKEN_CHOKI_COMMAND	'C'			/* チョキ */
-#define JANKEN_PAR_COMMAND	'P'			/* パー */
+#define JANKEN_ROCK_COMMAND	'R'			/* グー */
+#define JANKEN_SCISSORS_COMMAND	'S'			/* チョキ */
+#define JANKEN_PAPER_COMMAND	'P'			/* パー */
 
 /* じゃんけんの結果コマンド (サーバー -> クライアント) */
 #define RESULT_WIN_COMMAND	'W'			/* 勝ち */

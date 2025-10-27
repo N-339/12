@@ -13,11 +13,24 @@ static SDL_Window *gMainWindow;
 static SDL_Renderer *gMainRenderer;
 static SDL_Rect gButtonRect[4]; // グー、チョキ、パー、END の4つ
 
-// サーバーからの結果待ちかどうか (0: 待ってない, 1: 待ってる)
-static int gWaitingForResult = 0;
+static int gWaitingForResult = 0; // サーバーからの結果待ち
+
+static char gMyHand = 0;
+static char gOpponentHand = 0;
+
+/* ★ じゃんけん画像表示用のテクスチャと矩形 */
+static SDL_Texture *gMyHandTexture = NULL;
+static SDL_Texture *gOpponentHandTexture = NULL;
+static SDL_Rect gMyHandImageRect;
+static SDL_Rect gOpponentHandImageRect;
+
 
 static int CheckButtonNO(int x,int y);
-static void DrawResultText(const char* text);
+static const char* HandToText(char hand);
+static void DrawGameStatus(const char* resultMsg, char myHandChar, char oppHandChar);
+static SDL_Texture* LoadHandTexture(char handChar);
+static void ClearResultImages(void);
+
 
 /*****************************************************************
 関数名	: InitWindows
@@ -32,8 +45,8 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
 	SDL_Texture *texture;
 	SDL_Surface *image;
 	SDL_Rect src_rect;
-	// グー、チョキ、パー、END
-	char buttonFiles[4][10]={"1.jpg","2.jpg","3.jpg","END.jpg"}; 
+    /* ★ Requirement 1: 画像ファイル名を変更 */
+	char buttonFiles[4][10]={"R.png","S.png","P.png","END.png"}; 
 	char *s,title[10];
 
     /* SDLの初期化 */
@@ -42,8 +55,8 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
 		return -1;
 	}
 	
-	/* メインのウインドウを作成する (サイズを調整 340x150) */
-	if((gMainWindow = SDL_CreateWindow("Janken Game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 340, 150, 0)) == NULL) {
+	/* メインのウインドウを作成する (サイズを調整 3倍) */
+	if((gMainWindow = SDL_CreateWindow("Janken Game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1020, 450, 0)) == NULL) {
 		printf("failed to initialize videomode.\n");
 		return -1;
 	}
@@ -60,17 +73,16 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
 
 	/* ボタンの作成 (4つ) */
 	for(i=0;i<4;i++){
-		gButtonRect[i].x = 20 + 80*i; // 80間隔
-		gButtonRect[i].y = 10;
-		gButtonRect[i].w = 70;
-		gButtonRect[i].h = 50; // 少し高さを確保
+		gButtonRect[i].x = 60 + 240*i; 
+		gButtonRect[i].y = 30;         
+		gButtonRect[i].w = 210;        
+		gButtonRect[i].h = 150;        
       
 		s = buttonFiles[i];
 
 		image = IMG_Load(s);
         if (image == NULL) {
             printf("failed to load image: %s (SDL_image Error: %s)\n", s, IMG_GetError());
-            // 1.jpg, 2.jpg, 3.jpg, END.jpg が必要
             SDL_DestroyRenderer(gMainRenderer);
             SDL_DestroyWindow(gMainWindow);
             SDL_Quit();
@@ -78,18 +90,20 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
         }
 		texture = SDL_CreateTextureFromSurface(gMainRenderer, image);
 		src_rect = (SDL_Rect){0, 0, image->w, image->h};
-        // ボタンの矩形に合わせて描画
 		SDL_RenderCopy(gMainRenderer, texture, &src_rect, (&gButtonRect[i]));
 		SDL_FreeSurface(image);
         SDL_DestroyTexture(texture);
 	}
 
-    /* 結果表示領域の初期化 */
-    DrawResultText("Welcome! Choose your hand.");
+    /* ★ じゃけん画像表示領域の矩形を初期化 (ボタンの下あたり) */
+    gMyHandImageRect = (SDL_Rect){ 600, 250, 150, 150 }; // 右下、左寄り
+    gOpponentHandImageRect = (SDL_Rect){ 800, 250, 150, 150 }; // 右下、右寄り
+
+    DrawGameStatus("Welcome! Choose your hand.", 0, 0); // 自分の手と相手の手は最初は表示しない
 
 	SDL_RenderPresent(gMainRenderer);
 	
-    gWaitingForResult = 0; // 初期状態は待っていない
+    gWaitingForResult = 0; 
 	return 0;
 }
 
@@ -101,6 +115,10 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
 *****************************************************************/
 void DestroyWindow(void)
 {
+    /* ★ テクスチャの解放 */
+    if (gMyHandTexture) SDL_DestroyTexture(gMyHandTexture);
+    if (gOpponentHandTexture) SDL_DestroyTexture(gOpponentHandTexture);
+
     SDL_DestroyRenderer(gMainRenderer);
     SDL_DestroyWindow(gMainWindow);
 	SDL_Quit();
@@ -122,14 +140,12 @@ void WindowEvent(int num)
 
 		switch(event.type){
 			case SDL_QUIT:
-                // ウィンドウ閉じたらEND送信
 				SendEndCommand();
 				break;
 			case SDL_MOUSEBUTTONUP:
 				mouse = (SDL_MouseButtonEvent*)&event;
 				if(mouse->button == SDL_BUTTON_LEFT){
 					
-                    // サーバーからの結果待ち中はボタン操作を無視
                     if (gWaitingForResult) {
 #ifndef NDEBUG
                         printf("Waiting for result. Button press ignored.\n");
@@ -143,26 +159,37 @@ void WindowEvent(int num)
 					printf("WindowEvent()\n");
 					printf("Button %d is pressed\n",buttonNO);
 #endif
+                    /* ★ Requirement 3: じゃんけんボタンが押されたら表示をクリア */
+                    if (buttonNO >= 0 && buttonNO <= 2) {
+                        ClearResultImages(); // 古いじゃんけん画像をクリア
+                        gOpponentHand = 0; // 相手の手をクリア
+                    }
+
 					switch(buttonNO) {
                         case 0: // グー
-                            SendJankenCommand(JANKEN_GOO_COMMAND);
-                            gWaitingForResult = 1; // 結果待ち状態へ
-                            DrawResultText("You: GOO. Waiting for opponent...");
+                            gMyHand = JANKEN_ROCK_COMMAND;
+                            SendJankenCommand(gMyHand);
+                            gWaitingForResult = 1; 
                             break;
                         case 1: // チョキ
-                            SendJankenCommand(JANKEN_CHOKI_COMMAND);
-                            gWaitingForResult = 1; // 結果待ち状態へ
-                            DrawResultText("You: CHOKI. Waiting for opponent...");
+                            gMyHand = JANKEN_SCISSORS_COMMAND;
+                            SendJankenCommand(gMyHand);
+                            gWaitingForResult = 1; 
                             break;
                         case 2: // パー
-                            SendJankenCommand(JANKEN_PAR_COMMAND);
-                            gWaitingForResult = 1; // 結果待ち状態へ
-                            DrawResultText("You: PAR. Waiting for opponent...");
+                            gMyHand = JANKEN_PAPER_COMMAND;
+                            SendJankenCommand(gMyHand);
+                            gWaitingForResult = 1; 
                             break;
                         case 3: // END
+                            gMyHand = 0; // 自分の手をクリア
                             SendEndCommand();
-                            // END送信時はgWaitingForResultを操作しない (そのまま終了するため)
                             break;
+                    }
+
+                    if (buttonNO >= 0 && buttonNO <= 2) {
+                        /* ★ Requirement 3: 自分の手札をテキストで表示し、「Waiting」を出す */
+                        DrawGameStatus("Waiting for opponent...", gMyHand, 0); // 相手の手はまだ不明
                     }
 				}
 				break;
@@ -174,33 +201,34 @@ void WindowEvent(int num)
 関数名	: DrawResult
 機能	: メインウインドウにじゃんけんの結果を表示する
 引数	: char	result		: 結果コマンド (W, L, D)
+          char  opponentHand: 相手の手 (R, S, P)
 出力	: なし
 *****************************************************************/
-void DrawResult(char result)
+void DrawResult(char result, char opponentHand)
 {
     gWaitingForResult = 0; // 結果が来たので待ち状態解除
+    gOpponentHand = opponentHand; // 相手の手を保存
+
+    const char* resultText;
 
     switch(result) {
         case RESULT_WIN_COMMAND:
-            DrawResultText("You WIN! Choose next hand.");
+            resultText = "You WIN!"; // "Choose next hand." は DrawGameStatus で加える
             break;
         case RESULT_LOSE_COMMAND:
-            DrawResultText("You LOSE... Choose next hand.");
+            resultText = "You LOSE...";
             break;
         case RESULT_DRAW_COMMAND:
-            DrawResultText("DRAW. Choose next hand.");
+            resultText = "DRAW.";
             break;
-        case RESULT_WAIT_COMMAND:
-            // サーバー側ロジック変更により、これは使われないはず
-            // (クライアント側で「相手待ち」を表示しているため)
-             DrawResultText("Waiting for opponent...");
-             gWaitingForResult = 1; // 相手待ちならまだ待つ
+        default:
+            resultText = "Error: Unknown result.";
             break;
     }
+
+    /* ★ Requirement 2: 全てのステータスを描画 */
+    DrawGameStatus(resultText, gMyHand, gOpponentHand);
 }
-
-
-/* (DrawRectangle, DrawCircle, DrawDiamond は削除) */
 
 
 /*****
@@ -208,22 +236,133 @@ static
 *****/
 
 /*****************************************************************
-関数名	: DrawResultText
-機能	: ウィンドウ下部に結果文字列を描画する
-引数	: const char* text : 表示する文字列
+関数名	: HandToText
+機能	: 手の文字 (R,S,P) を文字列 ("Goo" 等) に変換する
+引数	: char hand
+出力	: const char*
+*****************************************************************/
+static const char* HandToText(char hand)
+{
+    switch(hand) {
+        case JANKEN_ROCK_COMMAND:    return "Rock";
+        case JANKEN_SCISSORS_COMMAND:  return "Scissors";
+        case JANKEN_PAPER_COMMAND:    return "Paper";
+        default:                    return ""; // 不明な場合は空文字列
+    }
+}
+
+/*****************************************************************
+関数名	: HandToFileName
+機能	: 手の文字 (R,S,P) をファイル名 ("R.png" 等) に変換する
+引数	: char hand
+出力	: const char*
+*****************************************************************/
+static const char* HandToFileName(char hand) {
+    switch(hand) {
+        case JANKEN_ROCK_COMMAND:    return "R.png";
+        case JANKEN_SCISSORS_COMMAND:  return "S.png";
+        case JANKEN_PAPER_COMMAND:    return "P.png";
+        default:                    return NULL; // 無効な手
+    }
+}
+
+/*****************************************************************
+関数名	: LoadHandTexture
+機能	: じゃんけんの手の画像テクスチャをロードする
+引数	: char handChar : 手の文字 (R, S, P)
+出力	: SDL_Texture* : ロードされたテクスチャ、失敗時はNULL
+*****************************************************************/
+static SDL_Texture* LoadHandTexture(char handChar) {
+    const char* filename = HandToFileName(handChar);
+    if (!filename) {
+        return NULL;
+    }
+
+    SDL_Surface* image = IMG_Load(filename);
+    if (!image) {
+        printf("failed to load image: %s (SDL_image Error: %s)\n", filename, IMG_GetError());
+        return NULL;
+    }
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(gMainRenderer, image);
+    SDL_FreeSurface(image);
+    return texture;
+}
+
+/*****************************************************************
+関数名	: ClearResultImages
+機能	: 以前のじゃんけん手札画像を解放し、レンダラーからクリアする
+引数	: なし
 出力	: なし
 *****************************************************************/
-static void DrawResultText(const char* text)
+static void ClearResultImages(void) {
+    // 既存のテクスチャを解放
+    if (gMyHandTexture) {
+        SDL_DestroyTexture(gMyHandTexture);
+        gMyHandTexture = NULL;
+    }
+    if (gOpponentHandTexture) {
+        SDL_DestroyTexture(gOpponentHandTexture);
+        gOpponentHandTexture = NULL;
+    }
+    // 表示領域を白でクリア
+    SDL_Rect clearRect = {550, 200, 450, 250}; // 右下部分の画像表示領域
+	SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255);
+  	SDL_RenderFillRect(gMainRenderer, &clearRect);
+    SDL_RenderPresent(gMainRenderer);
+}
+
+/*****************************************************************
+関数名	: DrawGameStatus
+機能	: ウィンドウ下部に全てのステータスを描画する
+引数	: const char* resultMsg : 勝敗結果メッセージ
+          char myHandChar    : 自分の手 (R, S, P, または 0)
+          char oppHandChar   : 相手の手 (R, S, P, または 0)
+出力	: なし
+*****************************************************************/
+static void DrawGameStatus(const char* resultMsg, char myHandChar, char oppHandChar)
 {
-    // 下部の領域を白でクリア
-    SDL_Rect clearRect = {0, 80, 340, 70}; // Y=80から下
+    /* クリア領域を拡大 (Y=200から下) */
+    SDL_Rect clearRect = {0, 200, 1020, 250}; 
 	SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255);
   	SDL_RenderFillRect(gMainRenderer, &clearRect);
 
-    // テキストを描画 (黒色: 0x000000ff)
-    // 座標は (X=10, Y=100)
-    stringColor(gMainRenderer, 10, 100, text, 0x000000ff);
+    /* ★ Requirement 2: 左下に結果メッセージを表示 */
+    stringColor(gMainRenderer, 30, 300, resultMsg, 0x000000ff);
+    
+    // 次のじゃんけんを促すメッセージは、結果が出た場合にのみ表示
+    if (strcmp(resultMsg, "Welcome! Choose your hand.") != 0 &&
+        strcmp(resultMsg, "Waiting for opponent...") != 0 &&
+        strcmp(resultMsg, "Error: Unknown result.") != 0) {
+        stringColor(gMainRenderer, 30, 350, "Choose next hand.", 0x000000ff);
+    }
 
+    /* ★ Requirement 2: 右側にじゃんけん手札の画像を表示 */
+    // 自分の手
+    if (myHandChar != 0) {
+        if (gMyHandTexture) SDL_DestroyTexture(gMyHandTexture); // 古いテクスチャ解放
+        gMyHandTexture = LoadHandTexture(myHandChar);
+        if (gMyHandTexture) {
+            stringColor(gMainRenderer, gMyHandImageRect.x, gMyHandImageRect.y - 30, "You:", 0x000000ff);
+            SDL_RenderCopy(gMainRenderer, gMyHandTexture, NULL, &gMyHandImageRect);
+        } else {
+            // 画像ロード失敗時はテキスト表示
+            stringColor(gMainRenderer, gMyHandImageRect.x, gMyHandImageRect.y, HandToText(myHandChar), 0x000000ff);
+        }
+    }
+
+    // 相手の手
+    if (oppHandChar != 0) {
+        if (gOpponentHandTexture) SDL_DestroyTexture(gOpponentHandTexture); // 古いテクスチャ解放
+        gOpponentHandTexture = LoadHandTexture(oppHandChar);
+        if (gOpponentHandTexture) {
+            stringColor(gMainRenderer, gOpponentHandImageRect.x, gOpponentHandImageRect.y - 30, "Opponent:", 0x000000ff);
+            SDL_RenderCopy(gMainRenderer, gOpponentHandTexture, NULL, &gOpponentHandImageRect);
+        } else {
+            // 画像ロード失敗時はテキスト表示
+            stringColor(gMainRenderer, gOpponentHandImageRect.x, gOpponentHandImageRect.y, HandToText(oppHandChar), 0x000000ff);
+        }
+    }
+    
     SDL_RenderPresent(gMainRenderer);
 }
 
@@ -231,10 +370,7 @@ static void DrawResultText(const char* text)
 /*****************************************************************
 関数名	: CheckButtonNO
 機能	: クリックされたボタンの番号を返す
-引数	: int	   x		: マウスの押された x 座標
-		  int	   y		: マウスの押された y 座標
-出力	: 押されたボタンの番号(0-3)を返す
-		  ボタンが押されていない時は-1を返す
+(中略)
 *****************************************************************/
 static int CheckButtonNO(int x,int y)
 {

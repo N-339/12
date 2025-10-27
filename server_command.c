@@ -8,12 +8,12 @@
 #include <arpa/inet.h> // htonl
 #include <unistd.h> // read, write, close
 
-static void SetIntData2DataBlock(void *data,int intData,int *dataSize);
+
 static void SetCharData2DataBlock(void *data,char charData,int *dataSize);
 // static int GetRandomInt(int n); // 乱数を使わないので削除
 
 /* 2人のクライアントの手を保存する配列 */
-/* 0 = 未受信, G = グー, C = チョキ, P = パー */
+/* 0 = 未受信, R = グー, S = チョキ, P = パー */
 static char gClientHands[MAX_CLIENTS] = {0, 0};
 
 static void JudgeAndSendResult(void);
@@ -54,9 +54,9 @@ int ExecuteCommand(char command,int pos)
 			break;
         
         /* じゃんけんの手を受信 */
-	    case JANKEN_GOO_COMMAND:
-        case JANKEN_CHOKI_COMMAND:
-        case JANKEN_PAR_COMMAND:
+	    case JANKEN_ROCK_COMMAND:
+        case JANKEN_SCISSORS_COMMAND:
+        case JANKEN_PAPER_COMMAND:
             // 既に手を受信済みの場合は無視 (クライアント側で制御してるはずだが念のため)
             if (gClientHands[pos] != 0) {
 #ifndef NDEBUG
@@ -117,9 +117,9 @@ static void JudgeAndSendResult(void)
         // あいこ
         result0 = RESULT_DRAW_COMMAND;
         result1 = RESULT_DRAW_COMMAND;
-    } else if ( (hand0 == JANKEN_GOO_COMMAND && hand1 == JANKEN_CHOKI_COMMAND) ||
-                (hand0 == JANKEN_CHOKI_COMMAND && hand1 == JANKEN_PAR_COMMAND) ||
-                (hand0 == JANKEN_PAR_COMMAND && hand1 == JANKEN_GOO_COMMAND) ) {
+    } else if ( (hand0 == JANKEN_ROCK_COMMAND && hand1 == JANKEN_SCISSORS_COMMAND) ||
+                (hand0 == JANKEN_SCISSORS_COMMAND && hand1 == JANKEN_PAPER_COMMAND) ||
+                (hand0 == JANKEN_PAPER_COMMAND && hand1 == JANKEN_ROCK_COMMAND) ) {
         // Client 0 の勝ち
         result0 = RESULT_WIN_COMMAND;
         result1 = RESULT_LOSE_COMMAND;
@@ -151,29 +151,6 @@ static void JudgeAndSendResult(void)
 }
 
 
-/*****************************************************************
-関数名	: SetIntData2DataBlock
-機能	: int 型のデータを送信用データの最後にセットする
-引数	: void		*data		: 送信用データ
-		  int		intData		: セットするデータ
-		  int		*dataSize	: 送信用データの現在のサイズ
-出力	: なし
-*****************************************************************/
-static void SetIntData2DataBlock(void *data,int intData,int *dataSize)
-{
-    int tmp;
-
-    /* 引き数チェック */
-    assert(data!=NULL);
-    assert(0<=(*dataSize));
-
-    tmp = htonl(intData);
-
-    /* int 型のデータを送信用データの最後にコピーする */
-    memcpy(data + (*dataSize),&tmp,sizeof(int));
-    /* データサイズを増やす */
-    (*dataSize) += sizeof(int);
-}
 
 /*****************************************************************
 関数名	: SetCharData2DataBlock
