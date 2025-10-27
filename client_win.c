@@ -26,7 +26,6 @@ static SDL_Rect gOpponentHandImageRect;
 
 
 static int CheckButtonNO(int x,int y);
-static const char* HandToText(char hand);
 static void DrawGameStatus(const char* resultMsg, char myHandChar, char oppHandChar);
 static SDL_Texture* LoadHandTexture(char handChar);
 static void ClearResultImages(void);
@@ -231,25 +230,6 @@ void DrawResult(char result, char opponentHand)
 }
 
 
-/*****
-static
-*****/
-
-/*****************************************************************
-関数名	: HandToText
-機能	: 手の文字 (R,S,P) を文字列 ("Goo" 等) に変換する
-引数	: char hand
-出力	: const char*
-*****************************************************************/
-static const char* HandToText(char hand)
-{
-    switch(hand) {
-        case JANKEN_ROCK_COMMAND:    return "Rock";
-        case JANKEN_SCISSORS_COMMAND:  return "Scissors";
-        case JANKEN_PAPER_COMMAND:    return "Paper";
-        default:                    return ""; // 不明な場合は空文字列
-    }
-}
 
 /*****************************************************************
 関数名	: HandToFileName
@@ -344,9 +324,6 @@ static void DrawGameStatus(const char* resultMsg, char myHandChar, char oppHandC
         if (gMyHandTexture) {
             stringColor(gMainRenderer, gMyHandImageRect.x, gMyHandImageRect.y - 30, "You:", 0xff000000);
             SDL_RenderCopy(gMainRenderer, gMyHandTexture, NULL, &gMyHandImageRect);
-        } else {
-            // 画像ロード失敗時はテキスト表示
-            stringColor(gMainRenderer, gMyHandImageRect.x, gMyHandImageRect.y, HandToText(myHandChar), 0xff000000);
         }
     }
 
@@ -357,9 +334,6 @@ static void DrawGameStatus(const char* resultMsg, char myHandChar, char oppHandC
         if (gOpponentHandTexture) {
             stringColor(gMainRenderer, gOpponentHandImageRect.x, gOpponentHandImageRect.y - 30, "Opponent:", 0xff000000);
             SDL_RenderCopy(gMainRenderer, gOpponentHandTexture, NULL, &gOpponentHandImageRect);
-        } else {
-            // 画像ロード失敗時はテキスト表示
-            stringColor(gMainRenderer, gOpponentHandImageRect.x, gOpponentHandImageRect.y, HandToText(oppHandChar), 0xff000000);
         }
     }
     

@@ -82,7 +82,6 @@ int ExecuteCommand(char command,int pos)
     return endFlag;
 }
 
-
 /*****
 static
 *****/
@@ -163,7 +162,6 @@ static void JudgeAndSendResult(void)
     gClientHands[1] = 0;
 }
 
-/* ★ SetIntData2DataBlock の定義を追加 */
 /*****************************************************************
 関数名	: SetIntData2DataBlock
 機能	: int 型のデータを送信用データの最後にセットする
