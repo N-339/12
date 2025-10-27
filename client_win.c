@@ -18,7 +18,7 @@ static int gWaitingForResult = 0; // サーバーからの結果待ち
 static char gMyHand = 0;
 static char gOpponentHand = 0;
 
-/* ★ じゃんけん画像表示用のテクスチャと矩形 */
+/* じゃんけん画像表示用のテクスチャと矩形 */
 static SDL_Texture *gMyHandTexture = NULL;
 static SDL_Texture *gOpponentHandTexture = NULL;
 static SDL_Rect gMyHandImageRect;
@@ -45,7 +45,7 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
 	SDL_Texture *texture;
 	SDL_Surface *image;
 	SDL_Rect src_rect;
-    /* ★ Requirement 1: 画像ファイル名を変更 */
+    /*画像ファイル名を変更 */
 	char buttonFiles[4][10]={"R.png","S.png","P.png","END.png"}; 
 	char *s,title[10];
 
@@ -95,7 +95,7 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
         SDL_DestroyTexture(texture);
 	}
 
-    /* ★ じゃけん画像表示領域の矩形を初期化 (ボタンの下あたり) */
+    /* じゃけん画像表示領域の矩形を初期化 (ボタンの下あたり) */
     gMyHandImageRect = (SDL_Rect){ 600, 250, 150, 150 }; // 右下、左寄り
     gOpponentHandImageRect = (SDL_Rect){ 800, 250, 150, 150 }; // 右下、右寄り
 
@@ -115,7 +115,7 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE])
 *****************************************************************/
 void DestroyWindow(void)
 {
-    /* ★ テクスチャの解放 */
+    /* テクスチャの解放 */
     if (gMyHandTexture) SDL_DestroyTexture(gMyHandTexture);
     if (gOpponentHandTexture) SDL_DestroyTexture(gOpponentHandTexture);
 
@@ -159,7 +159,7 @@ void WindowEvent(int num)
 					printf("WindowEvent()\n");
 					printf("Button %d is pressed\n",buttonNO);
 #endif
-                    /* ★ Requirement 3: じゃんけんボタンが押されたら表示をクリア */
+                    /* じゃんけんボタンが押されたら表示をクリア */
                     if (buttonNO >= 0 && buttonNO <= 2) {
                         ClearResultImages(); // 古いじゃんけん画像をクリア
                         gOpponentHand = 0; // 相手の手をクリア
@@ -188,7 +188,7 @@ void WindowEvent(int num)
                     }
 
                     if (buttonNO >= 0 && buttonNO <= 2) {
-                        /* ★ Requirement 3: 自分の手札をテキストで表示し、「Waiting」を出す */
+                        /* 自分の手札をテキストで表示し、「Waiting」を出す */
                         DrawGameStatus("Waiting for opponent...", gMyHand, 0); // 相手の手はまだ不明
                     }
 				}
@@ -226,7 +226,7 @@ void DrawResult(char result, char opponentHand)
             break;
     }
 
-    /* ★ Requirement 2: 全てのステータスを描画 */
+    /* 全てのステータスを描画 */
     DrawGameStatus(resultText, gMyHand, gOpponentHand);
 }
 
@@ -326,27 +326,27 @@ static void DrawGameStatus(const char* resultMsg, char myHandChar, char oppHandC
 	SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255);
   	SDL_RenderFillRect(gMainRenderer, &clearRect);
 
-    /* ★ Requirement 2: 左下に結果メッセージを表示 */
-    stringColor(gMainRenderer, 30, 300, resultMsg, 0x000000ff);
+    /* 左下に結果メッセージを表示 */
+    stringColor(gMainRenderer, 30, 300, resultMsg, 0xff000000);
     
     // 次のじゃんけんを促すメッセージは、結果が出た場合にのみ表示
     if (strcmp(resultMsg, "Welcome! Choose your hand.") != 0 &&
         strcmp(resultMsg, "Waiting for opponent...") != 0 &&
         strcmp(resultMsg, "Error: Unknown result.") != 0) {
-        stringColor(gMainRenderer, 30, 350, "Choose next hand.", 0x000000ff);
+        stringColor(gMainRenderer, 30, 350, "Choose next hand.", 0xff0000ff);
     }
 
-    /* ★ Requirement 2: 右側にじゃんけん手札の画像を表示 */
+    /* 右側にじゃんけん手札の画像を表示 */
     // 自分の手
     if (myHandChar != 0) {
         if (gMyHandTexture) SDL_DestroyTexture(gMyHandTexture); // 古いテクスチャ解放
         gMyHandTexture = LoadHandTexture(myHandChar);
         if (gMyHandTexture) {
-            stringColor(gMainRenderer, gMyHandImageRect.x, gMyHandImageRect.y - 30, "You:", 0x000000ff);
+            stringColor(gMainRenderer, gMyHandImageRect.x, gMyHandImageRect.y - 30, "You:", 0xff000000);
             SDL_RenderCopy(gMainRenderer, gMyHandTexture, NULL, &gMyHandImageRect);
         } else {
             // 画像ロード失敗時はテキスト表示
-            stringColor(gMainRenderer, gMyHandImageRect.x, gMyHandImageRect.y, HandToText(myHandChar), 0x000000ff);
+            stringColor(gMainRenderer, gMyHandImageRect.x, gMyHandImageRect.y, HandToText(myHandChar), 0xff000000);
         }
     }
 
@@ -355,11 +355,11 @@ static void DrawGameStatus(const char* resultMsg, char myHandChar, char oppHandC
         if (gOpponentHandTexture) SDL_DestroyTexture(gOpponentHandTexture); // 古いテクスチャ解放
         gOpponentHandTexture = LoadHandTexture(oppHandChar);
         if (gOpponentHandTexture) {
-            stringColor(gMainRenderer, gOpponentHandImageRect.x, gOpponentHandImageRect.y - 30, "Opponent:", 0x000000ff);
+            stringColor(gMainRenderer, gOpponentHandImageRect.x, gOpponentHandImageRect.y - 30, "Opponent:", 0xff000000);
             SDL_RenderCopy(gMainRenderer, gOpponentHandTexture, NULL, &gOpponentHandImageRect);
         } else {
             // 画像ロード失敗時はテキスト表示
-            stringColor(gMainRenderer, gOpponentHandImageRect.x, gOpponentHandImageRect.y, HandToText(oppHandChar), 0x000000ff);
+            stringColor(gMainRenderer, gOpponentHandImageRect.x, gOpponentHandImageRect.y, HandToText(oppHandChar), 0xff000000);
         }
     }
     

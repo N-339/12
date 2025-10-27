@@ -31,10 +31,11 @@
 #define JANKEN_SCISSORS_COMMAND	'S'			/* チョキ */
 #define JANKEN_PAPER_COMMAND	'P'			/* パー */
 
+#define RESULT_DATA_COMMAND     'A'         /* 結果データ */
+
 /* じゃんけんの結果コマンド (サーバー -> クライアント) */
 #define RESULT_WIN_COMMAND	'W'			/* 勝ち */
 #define RESULT_LOSE_COMMAND	'L'			/* 負け */
 #define RESULT_DRAW_COMMAND	'D'			/* あいこ */
-#define RESULT_WAIT_COMMAND 'S'         /* 相手待ち */
 
 #endif

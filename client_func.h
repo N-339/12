@@ -19,7 +19,6 @@ extern int SendRecvManager(void);
 extern int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE]);
 extern void DestroyWindow(void);
 extern void WindowEvent(int num);
-/* ★ 引数を変更 */
 extern void DrawResult(char result, char opponentHand); 
 
 /* client_command.c */

@@ -23,7 +23,7 @@ int main(int argc,char *argv[])
     	serverName = argv[1];
     }
     else{
-		fprintf(stderr, "Usage: %s [Server Name]\n", argv[0]); // メッセージを修正
+		fprintf(stderr, "Usage: %s [Server Name]\n", argv[0]); 
 		return -1;
     }
 

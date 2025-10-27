@@ -5,7 +5,7 @@
 
 #include"common.h"
 #include"client_func.h"
-#include <arpa/inet.h> // htonl
+// #include <arpa/inet.h> // SetIntData2DataBlockを使わないので不要
 #include <unistd.h> // read, write, close
 
 
@@ -32,17 +32,17 @@ int ExecuteCommand(char command)
 			endFlag = 0;
 			break;
 
-        /* ★ 結果受信 (W, L, D は R に統合) */
-	    case RESULT_DRAW_COMMAND: {
+        /* ★ 修正: 'D' ではなく 'A' (RESULT_DATA_COMMAND) を受信する */
+	    case RESULT_DATA_COMMAND: { 
             int resultInt, opponentHandInt;
             char result, opponentHand;
 
-            // サーバーから「結果(int)」と「相手の手(int)」を受信
+            // サーバーから「結果(int)」と「相手の手(int)」を追加で受信
             RecvIntData(&resultInt);
             RecvIntData(&opponentHandInt);
             
-            result = (char)resultInt;
-            opponentHand = (char)opponentHandInt;
+            result = (char)resultInt;       // W, L, D のいずれか
+            opponentHand = (char)opponentHandInt; // R, S, P のいずれか
 
 #ifndef NDEBUG
             printf("Recv Result: %c, Opponent: %c\n", result, opponentHand);
@@ -52,7 +52,8 @@ int ExecuteCommand(char command)
         }
 
         default:
-            printf("Unknown command received: %c\n", command);
+            /* これで 'R', 'S', 'W', 'L', 'D' などは 'Unknown' として扱われる (デバッグに役立つ) */
+            printf("Unknown command received: %c (0x%x)\n", command, command);
             break;
     }
     return endFlag;
@@ -61,7 +62,8 @@ int ExecuteCommand(char command)
 /*****************************************************************
 関数名	: SendJankenCommand
 機能	: サーバーにじゃんけんの手を送信する
-(中略)
+引数	: char handCommand (R, S, P)
+出力	: なし
 *****************************************************************/
 void SendJankenCommand(char handCommand)
 {
@@ -81,8 +83,6 @@ void SendJankenCommand(char handCommand)
 
 /*****************************************************************
 関数名	: SendEndCommand
-機能	: プログラムの終了を知らせるために，
-		  サーバーにデータを送る
 (中略)
 *****************************************************************/
 void SendEndCommand(void)
@@ -101,7 +101,6 @@ void SendEndCommand(void)
 
 /*****************************************************************
 関数名	: SetCharData2DataBlock
-機能	: char 型のデータを送信用データの最後にセットする
 (中略)
 *****************************************************************/
 static void SetCharData2DataBlock(void *data,char charData,int *dataSize)
